@@ -280,10 +280,156 @@
 
 #### 开发环境下设置和使用Kubernates
 
++ 前置需求：
 
+1.  进行完毕docker上k8s的安装
+2.  确保k8s在docker destop上可以使用
+
++ 介绍：
+
+既然证明了单个应用组件可以运行在独立的容器上。通过使用编制工具K8s对其进行关，k8s提供许多扩容，网络，安全和维护应用的工具（远远超过容器本身的能力）。
+
+为了去证实反序列化应用在k8s上也能使用，在k8s集群上处理应用前，我们使用DockerDestop的k8s环境去部署应用。dockerDestop上的k8s环境是完全特征化的，意味着k8s将你的应用特征化，应用会到一个真实的集群环境。可以获得开发机器上的便利条件。
+
++ 使用Kubernetes YAML描述应用
+
+所有k8s的容器按照**pods**形式进行调度，这是一组享有共同资源的协调工作容器。进一步看，实际应用不会创建个体**pods**。相反大多数的工作负载按照部署进行调度，这个是由k8s维护的可以扩展的，自动维护的**pods**组。最后，所有的k8s对象应当在k8s YAML文件描述配置清单信息。YAML文件描述组件和k8s应用配置信息，这些配置能够简单地创建和销毁k8s环境中的应用。
+
+1.  在第一份文档中你已经写了一个基本的k8s YAML文件，这下来尝试一个更加复杂的情况，记下一个文件为`bb.yaml`:
+
+   ```yaml
+   apiVersion: apps/v1
+   kind: Deployment
+   metadata:
+     name: bb-demo
+     namespace: default
+   spec:
+    # 副本数量配置
+     replicas: 1 
+     selector:
+       matchLabels:
+         bb: web
+     # 副本信息
+     template:
+       metadata:
+         labels:
+           bb: web
+       spec:
+       # 指定容器镜像信息
+         containers:
+         - name: bb-site
+           image: bulletinboard:1.0
+   ---
+   apiVersion: v1
+   kind: Service
+   metadata:
+     name: bb-entrypoint
+     namespace: default
+   spec:
+     type: NodePort
+     selector:
+       bb: web
+     ports:
+     - port: 8080
+       targetPort: 8080
+       nodePort: 30001
+   ```
+
+   在这个YAML文件了,存在有两个对象,由--- 分割
+
+   +  第一个名称为Deployment,描述了一个可以扩展的pods,在这种情况下,你可以获取一个副本.且那个pods(描述诶template)有一个运行的容器,基于 bulletinboard:1.0
+   +  第二个名称为NodePort服务,会占用主机30001端口(使用pods内部路由定位到8080端口),这样可以同个这个端口访问公告板页面.
+
+   同时也需要注意到yaml文件可以添加长且复杂的信息,包括如下几个类型:
+
+   +  `apiVersion`:  包含指示k8s API需要转换的对象
+   +  `kind`: 指示对象的类型
+   +  `metadata`: 对象的名称
+   +  `spec`: 指定配置对象的参数列表
+
++  部署和检查你的应用情况
+
+  1.  在终端中指定编写的`bb.yaml`文件,部署应用到k8s上
+
+     ```shell
+     kubectl apply -f bb.yaml
+     ```
+
+     可以看到下面类似的输出,表示你的k8s对象创建成功
+
+     ```shell
+     deployment.apps/bb-demo created
+     service/bb-entrypoint created
+     ```
+
+  2.  确认部署的工作列表
+
+     ```shell
+     kubectl get deployments
+     ```
+
+     如果全部都工作正常,显示类似如下信息:
+
+     ```shell
+     NAME      DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+     bb-demo   1         1         1            1           48s
+     ```
+
+     这个表示所有在YAML中配置的pods正在运行中.同样的做法去确认`services`
+
+     ```shell
+     kubectl get services
+     
+     NAME            TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+     bb-entrypoint   NodePort    10.106.145.116   <none>        8080:30001/TCP   53s
+     kubernetes      ClusterIP   10.96.0.1        <none>        443/TCP          138d
+     ```
+     这里我们可以看到访问端口在30001.
+     
+  3.   打开浏览器访问`localhost:30001`端口.你应当可以看到公告板的页面.
+  
+  4.   删除部署
+  
+      ```shell
+      kubectl delete -f bb.yaml
+      ```
 
 #### 开发环境下设置和使用Swarm
 
-
+暂时不更新这个文档内容
 
 #### 在Dcoker Hub上共享容器化应用
+
+这里主要介绍在docker hub上发布镜像.
+
+1.  操作需求
+
+   在DockerDestop上部署了k8s.
+
+2.  介绍
+
+   所有操作的最后一步,就是部署容器化应用,将其分享镜像到DockerHub中.以便可以很方便的下载和运行在任意目标集群中.
+
+3.  创建DockerHub账户
+
+4.  创建和推送到DockHub库中
+
+   这里你已经创建DockerHub账号,现在开始创建第一个库,在这里会分享公告板app.
+
+   +  点击Docker桌面图标,找到**Repositories** -> **Create**,会进入DockerHub页面,去创建一个新的库.
+
+   +  找到`bulletinboard` 的库,先不考虑其他配置,直接点击底部的创建
+
+   + 现在就可以共享镜像到DockerHub上了,但是现在有一样事情必须要去做,镜像必须在DockerHub中正确命名,形如`<Docker Hub ID>/<Repository Name>:<tag>`,现在对docker的名称进行重新标记:
+
+     ```shell
+     docker image tag bulletinboard:1.0 gordon/bulletinboard:1.0
+     ```
+
+   + 最后,将镜像推送到DockerHub上
+
+     ```shell
+     docker image push gordon/bulletinboard:1.0
+     ```
+
+   这时候就可以访问DockerHub了,你可以看到你的新镜像,默认情况下库时公有的.
