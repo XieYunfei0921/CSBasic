@@ -507,20 +507,341 @@
       
         10. [COPY指令](https://docs.docker.com/engine/reference/builder/#copy)
       
+            `ADD`和`COPY`基本相似,总体来说,建议使用`COPY`.但是`COPY`指令只支持本地文件拷贝到容器中,而`ADD`有一些特征(本地tar包压缩或者远端URL支持).从结果上来说,`ADD`可以将本地tar包添加到镜像中.`ADD rootfs.tar.xz / .`
+      
+            如果有多个`dockerfile`步骤,使用了环境中不同的文件,单独的`COPY`它们.而非一次全部拷贝完毕.保证步骤的构建缓存时无效的.例如:
+      
+            ```shell
+            COPY requirements.txt /tmp/
+            RUN pip install --requirement /tmp/requirements.txt
+            COPY . /tmp/
+            ```
+      
+            对于RUN指令,导致了较少的缓存失效.比起你在前面使用COPY指令.
+      
+            由于进行大小的影响,使用`ADD`去获取来自远端URL的1包,推荐使用这个方法.使用`curl`或者`wget`指令.这种方式会删除你不再需要的文件.不需要将其他层添加到镜像,可以这样做:
+      
+            ```shell
+            # 使用远端URL 添加,去除镜像大小的影响
+            ADD http://example.com/big.tar.xz /usr/src/things/
+            RUN tar -xJf /usr/src/things/big.tar.xz -C /usr/src/things
+            RUN make -C /usr/src/things all
+            ```
+      
+            也可以使用`curl`指令
+      
+            ```shell
+            RUN mkdir -p /usr/src/things \
+                && curl -SL http://example.com/big.tar.xz \
+                | tar -xJC /usr/src/things \
+                && make -C /usr/src/things all
+            ```
+      
         11. [ENTRYPOINT指令](https://docs.docker.com/engine/reference/builder/#entrypoint)
+      
+            `ENTRYPOINT`设置主命令的最优指令,使得镜像运行向它就是这个命令.
+      
+            使用`s3cmd`做示例演示:
+      
+            ```shell
+            ENTRYPOINT ["s3cmd"] # 使用s3cmd工具 
+            CMD ["--help"] #执行帮助指令
+            ```
+      
+            镜像可以这样运行,就会显示指令的帮助信息
+      
+            ```shell
+            docker run s3cmd
+            ```
+      
+            使用正确的参数去执行指令
+      
+            ```shell
+            docker run s3cmd ls s3://mybucket
+            ```
+      
+            这个指令也可以用于合并辅助脚本,允许在开始工具需要多个步骤的时候,执行类似上述的步骤,例如Postgre:
+      
+            ```shell
+            #!/bin/bash
+            set -e
+            if [ "$1" = 'postgres' ]; then
+                chown -R postgres "$PGDATA"
+                if [ -z "$(ls -A "$PGDATA")" ]; then
+                    gosu postgres initdb
+                fi
+                exec gosu postgres "$@"
+            fi
+            exec "$@"
+            ```
+      
+            将㕚脚本拷贝到容器，运行`ENTRYPOINT`指令
+      
+            ```dockerfile
+            COPY ./docker-entrypoint.sh /
+            ENTRYPOINT ["/docker-entrypoint.sh"]
+            CMD ["postgres"]
+            ```
+      
+            开启postgre
+      
+            ```shell
+            docker run postgres
+            ```
+      
+            或者带参数运行
+      
+            ```shell
+            docker run postgres postgres --help
+            ```
+      
+            最后也可以通过其他工具运行
+      
+            ```shell
+            docker run --rm -it postgres bash
+            ```
       
         12. [VOLUME指令](https://docs.docker.com/engine/reference/builder/#volume)
       
+            `VOLUME`指令需要用于暴露数据块存储其余,配置存储或者docker容器创建的文件或者文件夹.建议使用`VOLUME`指令对于可变的或者用户服务的部分.
+      
         13. [USER指令](https://docs.docker.com/engine/reference/builder/#user)
+      
+            如果服务没有执行权限,可以通过`USER`切换环岛一个非ROOT的用于,,可以创建用户或者用户组,示例如下:
+      
+            ```shell
+            RUN groupadd -r postgres && useradd --no-log-init -r -g postgres postgres.
+            ```
+      
+            请避免使用sudo,应为会造成不可预测的TTY,比如说启动服务需要root权限,但是运行时使用的是非root用户,考虑使用gosu.
+      
+            最后,为了降低层次和复杂度,请避免频繁切换`USER`
       
         14. [WORKDIR指令](https://docs.docker.com/engine/reference/builder/#workdir)
       
+            为了提高可靠性,使用这个指令时尽量使用绝对地址.或者你也可以使用`WORKDIR`从而不去使用`RUN cd ... && do sth`这样的指令,可读性第,且会引起问题.
+      
         15. [ONBUILD指令](https://docs.docker.com/engine/reference/builder/#onbuild)
+      
+            在`ONBUILD`指令执行完成之后,这个治好了从`FROM`当前镜像执行子镜像.由于`ONBUILD`指令在任何子`dockerfile`之前。`ONBUILD`指令对于构建`FROM`给定镜像构建镜像时十分有用的.例如,你可以使用`ONBUILD`用于追踪镜像.
+      
+            请注意`ONBUILD`中的ADD和COPY指令,如果新建的上下文环境中确实需要添加的资源,镜像会出现毁灭性的失败.推荐使用不同的标签,帮助迁移.
 
 2. 创建基本镜像
 
-3.  多段构建
+   大多数dockerfile来源于一个父镜像,如果你需要完全控制镜像内容,需要创建基础镜像.
 
-4.  管理镜像
+   +  `FROM`指令引入父镜像
+   +  基础镜像dockerfile中含有`FROM scratch`
 
-5.  Docker构建的提升
+   #### 使用tar创建完全镜像
+
+   总而言之,开始运行,就是运行你需要打包的父镜像.尽管在一些系统中不需要这样的操作.,下面构建一个简单的Ubuntu镜像:
+
+   ```shell
+   $ sudo debootstrap xenial xenial > /dev/null
+   $ sudo tar -C xenial -c . | docker import - xenial
+   
+   a29c15f1bf7a
+   
+   $ docker run xenial cat /etc/lsb-release
+   
+   DISTRIB_ID=Ubuntu
+   DISTRIB_RELEASE=16.04
+   DISTRIB_CODENAME=xenial
+   DISTRIB_DESCRIPTION="Ubuntu 16.04 LTS"
+   ```
+
+   当然也可以从Docker Github仓库中找到构建其他镜像的脚本
+
+   #### 使用scratch创建简单父镜像
+
+   当`scratch`出现在docker的库中时,你可以拉取它,运行它,使用scratch标签它.此外,你可以在自己的`dockerfile`中应用,下面就是创建最小镜像的示例:
+
+   ```shell
+   FROM scratch
+   ADD hello /
+   CMD ["/hello"]
+   ```
+
+   假设你建立一个[hello](https://github.com/docker-library/hello-world/)的示例,使用`-static`标记镜像编译.可以使用`docker build`进行构建.
+
+   ```shell
+   docker build --tag hello .
+   ```
+
+   最后的`.`时将构建上下文定位到当前目录的意思.
+
+   这样就可以运行指令
+
+   ```shell
+   docker run --rm hello
+   ```
+
+3. 多段构建
+
+   多段构建时Docker 17.05 之后的功能,当需要高效构建或者保证dockerfile易维护或者可读取强的必须工作.
+
+   #### 构建前的准备
+
+   最重要的是保证镜像大小尽可能小,每个指令都会添加镜像的层数.在移动到下一个层次之前,你需要清理掉你不需要的层次.为了高效的写dockerfile,可以使用传统的shell技巧使得层次能够尽可能的来源于上个层次.
+
+   构建一个镜像,只包含应用和实际需要的依赖在开发环境下是很普遍的.
+
+   这里是一个`Dockerfile.build`和`Dockerfile`,都是按照上述构成形式.
+
+   `Dockerfile.build`
+
+   ```dockerfile
+   FROM golang:1.7.3
+   WORKDIR /go/src/github.com/alexellis/href-counter/
+   COPY app.go .
+   RUN go get -d -v golang.org/x/net/html \
+     && CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app .
+   ```
+
+   注意到案例中两个RUN指令使用&& 合并起来,从而降低了层次的数量.
+
+   `Dockerfile`
+
+   ```dockerfile
+   FROM alpine:latest  
+   RUN apk --no-cache add ca-certificates
+   WORKDIR /root/
+   COPY app .
+   CMD ["./app"]  
+   ```
+
+   `build.sh`
+
+   ```shell
+   #!/bin/sh
+   echo Building alexellis2/href-counter:build
+   
+   docker build --build-arg https_proxy=$https_proxy --build-arg http_proxy=$http_proxy \  
+       -t alexellis2/href-counter:build . -f Dockerfile.build
+   
+   docker container create --name extract alexellis2/href-counter:build  
+   docker container cp extract:/go/src/github.com/alexellis/href-counter/app ./app  
+   docker container rm -f extract
+   
+   echo Building alexellis2/href-counter:latest
+   
+   docker build --no-cache -t alexellis2/href-counter:latest .
+   rm ./app
+   ```
+
+   当你运行这个脚本使,需要构建第一个镜像,创建第一个需要拷贝的容器.然后才能构建第二个镜像.每个镜像都会占用系统资源.
+
+   #### 使用多段构建
+
+   多段构建中,你可以使用多个FROM指令,每个FROM指令都可以使用一个不同的基础镜像.且每一个都会开始一个新的分段.你可以拷贝分段到另一个当中.你不需要的放在最终镜像中,下面是一个多段镜像的例子:
+
+   `Dockerfile`
+
+   ```dockerfile
+   FROM golang:1.7.3
+   WORKDIR /go/src/github.com/alexellis/href-counter/
+   RUN go get -d -v golang.org/x/net/html  
+   COPY app.go .
+   RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app .
+   
+   FROM alpine:latest  
+   RUN apk --no-cache add ca-certificates
+   WORKDIR /root/
+   COPY --from=0 /go/src/github.com/alexellis/href-counter/app .
+   CMD ["./app"]  
+   ```
+
+   这样就不需要分多次构建了,运行构建指令
+
+   ```shell
+   docker build -t alexellis2/href-counter:latest .
+   ```
+
+   最终结果是相同的,但是构建负载的降低.不需要创建中间镜像.你不需要分发安装包到本地文件系统上.
+
+   如何运行的:
+
+   第二个FROM指令开始一个新的分段,使用`alpine:lastest`作为基础镜像.`COPY --from=0`仅仅拷贝上一个分段的安装包到新的分段中.其他安装包被留下来,不会保存到最终镜像中.
+
+   #### 命名构建分段(stage)
+
+   默认情况下,分段没有命名,通过整数执行它们.首个FROM的分段命名为0.但是你也可通过`AS <NAME>`到`FROM`指令.这个实例通过命名分段和拷贝指令提前了前一个分段.这就一位置,就算你的docker文件重新排序了,这个CPOY还是不可以破坏的.
+
+   ```dockerfile
+   FROM golang:1.7.3 AS builder
+   WORKDIR /go/src/github.com/alexellis/href-counter/
+   RUN go get -d -v golang.org/x/net/html  
+   COPY app.go    .
+   RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app .
+   
+   FROM alpine:latest  
+   RUN apk --no-cache add ca-certificates
+   WORKDIR /root/
+   COPY --from=builder /go/src/github.com/alexellis/href-counter/app .
+   CMD ["./app"]  
+   ```
+
+   #### 指定分段停止
+
+   当不需要构建整个dockerfile的时候,你可以指定分段停止.命令如下(使用`builder`)
+
+   ```shell
+   docker build --target builder -t alexellis2/href-counter:latest .
+   ```
+
+   这种方式在下列情况下比较好使:
+
+   1.  debug 指定构建stage
+   2.  使用`debug`分段
+   3.  在应用中属于测试分段,但是在生成环境下使用另一个stage(使用真实数据)
+
+   #### 使用外部镜像存储
+
+   使用多段构建时,对于拷贝之间docker文件的分段的拷贝是没有限制的.你可以使用`COPY -from`
+
+   拷贝指定镜像.或者使用本地镜像名称,本地可识别标签或者docker注册器,或者标签ID.如果必须的话docker客户端需要拉取镜像,且从中拷贝.语法如下:
+
+   ```shell
+   COPY --from=nginx:latest /etc/nginx/nginx.conf /nginx.conf
+   ```
+
+   #### 以前一个分段作为起始分段
+
+   可以在上一个分段的基础上构建新的分段
+
+   ```dockerfile
+   FROM alpine:latest as builder
+   RUN apk --no-cache add build-base
+   
+   FROM builder as build1
+   COPY source1.cpp source.cpp
+   RUN g++ -o /binary source.cpp
+   
+   FROM builder as build2
+   COPY source2.cpp source.cpp
+   RUN g++ -o /binary source.cpp
+   ```
+
+4. 管理镜像
+
+   #### Docker注册器
+
+   docker注册器是docker生态系统的组件.注册器是一个存储器且内容分发系统,容纳docker镜像.可以使用在不同的标签版本中
+
+   例如`distribution/registry`镜像,标签为`2.0`和`lastet`,通过push和pull指令与注册器进行交互:
+
+   ```shell
+   docker pull myregistry.com/stevvooe/batman:voice.
+   ```
+
+   **信任的docker注册器**
+
+   是Docker版本编辑器的一部分,是私有的,完全的docker注册器.包含如下特征,**镜像标记**,**内容信任**,**基于身份获取权限**,且其他版本级别的特征.
+
+   **内容信任**
+
+   在网络系统间传送数据的时候,信任是集中考虑的.特殊情况下,当与一个不受信任的中间件沟通时.确保系统操作的数据的发布者和完整性是非常重要的.内容信任机制使得可以鉴别数据的完整性和数据的发布者.
+
+5. Docker构建的提升
