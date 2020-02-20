@@ -186,8 +186,6 @@ docker服务如此强大的原因是，你可以互相连接，或者连接到�
      >
      > + 创建覆盖网络时,需要初始化docker启动器,使用`docker swarm init`或者加入到指定swarm中,使用`docker swarm join`.这些使用`ingress`创建了默认的覆盖网络,用于swarm服务.如果你需要使用swarm服务,之后你可以创建额外的用户定位网络.
 
-#### 使用覆盖网络
-
 ​	使用swarm服务创建覆盖网络,使用下述命令:
 
 ```shell
@@ -201,6 +199,126 @@ $ docker network create -d overlay --attachable my-attachable-overlay
 ```
 
 这里你可以指定ip地址范围,子网,网关和其他参数.使用`docker network create --help`查看.
+
++ 加密覆盖网络
+
+  swarm服务管理的信号量默认情况下是加密的。在GCM模式下使用[AES加密算法](https://en.wikipedia.org/wiki/Galois/Counter_Mode)，管理节点每12小时swarm反转key用于加密传播数据。
+
+  加密应用数据和创建覆盖网络时使用`--opt encryted`.允许再vxlan层创建IPSEC加密,加密有一些微小的表现.在生产环境中使用前,需要测试这些参数.
+
+  如果你开启了覆盖层网络加密,docker会在所有节点之间创建IPSEC通道,在GCM模式下使用AES算法,使其能够自动管理节点.
+
+  > 注意不要在覆盖网络中连接windows节点
+  >
+  > windows节点可以连接上,但是不能进行通信.
+
++ 覆盖网络swarm模式和独立容器
+
+  可以使用`--opt encrypted --attachable`连接网络中没有管理的容器
+
+  ```scala
+  $ docker network create --opt encrypted --driver overlay --attachable my-attachable-multi-host-network
+  ```
+
++ 自定义默认入口网络
+
+  大多数用户永远都不需要对入口网络进行配置,但是docker 17.05之后的版本允许对入口网络进行配置,如果与一个已经存在的网络存在子网冲突,这是使用这个就会自动选择.你也可以自定义底层网络配置(例如MTU).
+
+  自定义入口网络八米宽移除和重建,在你创建swarm服务之前创建,如果之前有服务发布了这个端口,这些服务需要在你移除入口网络之前被移除.
+
+  During the time that no `ingress` network exists, existing services which do not publish ports continue to function but are not load-balanced. This affects services which publish ports, such as a WordPress service which publishes port 80.
+
+  没有入口网络存在的期间,存在的服务不会发布端口,这个会影响服务的帆布端口.
+
+  1.  检查入口网络,移除连接的容器.如果没有移除,下一步将会失败.
+
+     ```shell
+     docker network inspect ingress
+     ```
+
+  2.  移除指定入口网络
+
+     ```shell
+     docker network rm ingress
+     ```
+
+  3.  使用`--ingress`标记创建一个新的覆盖网络,可以设置你配置的用户配置.示例将MTU设置到1200端口上,子网为10.11.0.0/16,网关地址为10.11.0.2
+
+     ```shell
+     $ docker network create \
+       --driver overlay \
+       --ingress \
+       --subnet=10.11.0.0/16 \
+       --gateway=10.11.0.2 \
+       --opt com.docker.network.driver.mtu=1200 \
+       my-ingress
+     ```
+
+  4.  重启之前停止的服务
+
++ 自定义docker _gwbridge接口
+
+  `docker _gwbridge`是一个连接到覆盖网络的虚拟网桥(包括入口网络),将其连接到docker启动器的物理网络上.当你创建以恶搞swarm或者添加一个docker主机到swarm中时docker自动创建.但是不是docker服务,它存在于docker主机内核中,如果你需要自定义参数,必须要在将docker主机添加到swarm之前,对其进行自定义.获取这是暂时的将主机移除swarm进行自定义.
+
+  1. 停止docker
+
+  2. 删除存在的`docker _gwbridge`接口
+
+  3. 开启docker,加入或者初始化swarm
+
+  4. 手动创建或者重建`docker _gwbridge`网桥,使用自定义参数,使用`docker network create`指令,示例使用子网`10.11.0.0/16`创建子网.对于整个自定义参数,参考[网桥驱动器](https://docs.docker.com/engine/reference/commandline/network_create/#bridge-driver-options)配置
+
+     ```shell
+     $ docker network create \
+     --subnet 10.11.0.0/16 \
+     --opt com.docker.network.bridge.name=docker_gwbridge \
+     --opt com.docker.network.bridge.enable_icc=false \
+     --opt com.docker.network.bridge.enable_ip_masquerade=true \
+     docker_gwbridge
+     ```
+
+  5. 初始化或者加入swarm,由于网桥已经存在,docker不需要自动创建.
+
++ swarm服务操作
+
+  1.  发布覆盖网络的端口
+
+     swarm服务连接到同一个覆盖网络上,暴露所有端口.对于一个可以从外部获取的端口,端口必须使用`-p`或者`--publish`标记.在`docker service create`或者`docker service update`
+
+     | Flag值                                                       | 描述                                                         |
+     | ------------------------------------------------------------ | ------------------------------------------------------------ |
+     | -p 8080:80<br />-p published=8080,target=80                  | 将TCP 80端口映射到服务的8080端口                             |
+     | `-p 8080:80/udp` or<br />-p published=8080,target=80,protocol=udp | 将UDP 80端口,映射到服务8080端口                              |
+     | `-p 8080:80/tcp -p 8080:80/udp` or<br />-p published=8080,target=80,protocol=tcp -p published=8080,target=80,protocol=udp | 映射TCP 80端口到服务的8080端口,同时映射UDP的 80端口到服务8080端口 |
+
+  2. swarm服务绕开路由网络
+
+     默认情况下,swarm服务发送端口,通过使用路由当你连接到一个发布的swarm 节点端口(无论是不是给定的服务).显然的重定向到允许服务的执行者身上.docker对你的swarm 服务进行负载均衡.使用虚拟IP模式使用路由,不能保证docker节点服务客户端的请求情况.
+
+     为了绕开路由网络,可以开启一个DNS 的循环(Round Robin). 通过设置`--endpoint-mode`标志给`dnsrr`.必须在服务之前,进行负载均衡.一个DNS任务请求返回了IP地址列表,用于允许任务的节点.配置你的负载均衡器去消费你的列表,且平衡节点间的信号量.
+
+  3.  分离控制和数据信号量
+
+     默认情况下,空值信号量与swarm管理器相关,信号量来自于你的应用.通过swarm信号量控制的加密,你可以配置docker,去使用分离网络接口,用于处理两个不同类型的信号量.当你初始化或者加入swarm时,分别指定`--advertise-addr`和`--datapath-addr`.每个节点加入时必须如此操作.
+
++  独立容器的操作
+
+  1.  连接独立容器
+
+     入口网络没有`--attachable`标志,这个意味着只有swarm服务可以使用,而不是独立容器.你可以连接独立容器去.你可以连接独立容器到用户定义的覆盖网络上(使用`-attachable`标记创建).这个可以给与独立容器不需要在独立docker启动器上设置路由的情况下,进行通信.
+
+  2.  发布端口
+
+     | flag值                          | 描述                                                         |
+     | ------------------------------- | ------------------------------------------------------------ |
+     | `-p 8080:80`                    | 映射TCP 80端口到覆盖网络的8080端口                           |
+     | `-p 8080:80/udp`                | 映射UPD 80端口到覆盖网络8080端口                             |
+     | `-p 8080:80/sctp`               | 映射STCP 80端口到覆盖网络8080端口                            |
+     | `-p 8080:80/tcp -p 8080:80/udp` | 映射TCP 80到覆盖网络的8080端口,UDP 80端口到覆盖网络的8080端口 |
+
+  3.  容器发现
+
+     对于大多数情况,你可以连接到服务名称,这个是负载均衡的,使用返回服务的容器处理.获取一列任务列表,用于放置服务信息,进行DNS查找,形如`tasks.<service-name>`
 
 #### 使用主机网络
 
