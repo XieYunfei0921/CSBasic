@@ -322,12 +322,207 @@ $ docker network create -d overlay --attachable my-attachable-overlay
 
 #### 使用主机网络
 
+如果你使用容器的主机网络模式,容器的网络栈没有和docker主机各类.这个容器不会获取自身分配的IP地址.此外,如果你运行一个绑定到80端口的容器,且使用了主机网络,容器的应用可以通过80端口获取服务.
+
+主机模式网络对于优化相当有用.当一个容器需要处理大量端口时,因为它不需要网络地址转换(NAT).且每个端口没有创建用户代理.
+
+主机网络驱动器只工作在linux主机上.不支持其他类型.
+
+你可以使用swarm service的主机网络,通过传递`--network host` 给`docker service host`指令.这种情况下,控制信号量仍然通过覆盖网络发送.但是单个swarm服务容器通过docker启动器的主机网络和端口发送数据.例如,一个服务容器绑定到80端口,仅仅一个服务容器可以运行指定的swarm节点.
+
 #### 使用Mac VLAN网络
+
++ 创建MAC VLAN网络
+
+  当你创建一个`MAC VLAN`网络时,既可以桥接也可以使用中继网桥接
+
+  1. 在桥接模式下`MAC VLAN`信号量遍布主机上的所有设备
+  2.  中继网桥接模式下,允许控制路由和在粒状层级进行控制.
+
++ 桥接模式
+
+  使用`docker network create`和`-driver macvlan`指令,创建一个桥接所有物理设备接口的`MAC VLAN`网络.你也可以指定`parent`,这个时docker主机会遍布的接口.
+
+  ```shell
+  $ docker network create -d macvlan \
+    --subnet=172.16.86.0/24 \
+    --gateway=172.16.86.1 \
+    -o parent=eth0 pub_net
+  ```
+
+  如果你需要排除一些ip地址,使用`--aux-address`
+
+  ```shell
+  $ docker network create -d macvlan \
+    --subnet=192.168.32.0/24 \
+    --ip-range=192.168.32.128/25 \
+    --gateway=192.168.32.254 \
+    --aux-address="my-router=192.168.32.129" \
+    -o parent=eth0 macnet32
+  ```
+
++ 802.1q中继线桥接模式
+
+  可以指定`parent`接口,比如`eth0.50`.docker会作为`eth0`对其进行中断,并创建子接口.
+
+  ```shell
+  $ docker network create -d macvlan \
+      --subnet=192.168.50.0/24 \
+      --gateway=192.168.50.1 \
+      -o parent=eth0.50 macvlan50
+  ```
+
++ 使用ipvlan代替
+
+  仍旧可以使用L3网桥,可以使用`ipvlan`代替,且获取一个L2网桥,指定`-o ipvlan_mode=l2`
+
+  ```shell
+  $ docker network create -d ipvlan \
+      --subnet=192.168.210.0/24 \
+      --subnet=192.168.212.0/24 \
+      --gateway=192.168.210.254 \
+      --gateway=192.168.212.254 \
+       -o ipvlan_mode=l2 ipvlan210
+  ```
+
++ 使用IPV6
+
+  你可以开启IPV6,使得可以处理IPV4/IPV6的`mac vlan`网络
+
+  ```shell
+  $ docker network create -d macvlan \
+      --subnet=192.168.216.0/24 --subnet=192.168.218.0/24 \
+      --gateway=192.168.216.1 --gateway=192.168.218.1 \
+      --subnet=2001:db8:abc8::/64 --gateway=2001:db8:abc8::10 \
+       -o parent=eth0.218 \
+       -o macvlan_mode=bridge macvlan216
+  ```
 
 #### 取消容器的网络
 
+如果你想完全取消容器的网络协议栈,可以在启动容器的时候,使用`--network none`标记.这是只会创建回环服务.
+
+1. 创建容器
+
+   ```shell
+   $ docker run --rm -dit \
+     --network none \
+     --name no-net-alpine \
+     alpine:latest \
+     ash
+   ```
+
+2. 检查容器网络协议栈
+
+   ```shell
+   $ docker exec no-net-alpine ip link show
+   
+   1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN qlen 1
+       link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+   2: tunl0@NONE: <NOARP> mtu 1480 qdisc noop state DOWN qlen 1
+       link/ipip 0.0.0.0 brd 0.0.0.0
+   3: ip6tnl0@NONE: <NOARP> mtu 1452 qdisc noop state DOWN qlen 1
+       link/tunnel6 00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00 brd 00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00
+   ```
+
+   再执行指令,查看容器路由表
+
+   ```shell
+   $ docker exec no-net-alpine ip route
+   ```
+
+3. 停止容器,自动移除
+
+   ```shell
+   $ docker container rm no-net-alpine
+   ```
+
 #### 网络配置教程
 
+1.  桥接网络配置
+
+   + [官方教程](https://docs.docker.com/network/network-tutorial-standalone/)
+   + [本地教程](http://127.0.0.1:4000/network/network-tutorial-standalone/)
+
+2. 主机网络配置
+
+   https://docs.docker.com
+
+   + [官方教程](https://docs.docker.com/network/network-tutorial-host/)
+   + [本地教程](http://127.0.0.1:4000/network/network-tutorial-host/)
+
+3. 覆盖网络配置
+
+   + [官方教程](https://docs.docker.com/network/network-tutorial-overlay/)
+   + [本地教程](http://127.0.0.1:4000/network/network-tutorial-overlay/)
+
+4. MAC VLAN网络配置
+
+   + [官方教程](https://docs.docker.com/network/network-tutorial-macvlan/)
+   + [本地教程](http://127.0.0.1:4000/network/network-tutorial-macvlan/)
+
 #### 配置和启动容器
+
++ 配置IPV6 启动器
+
+  先允许IPV6再docker容器上运行,才能使用docker容器或者swarm服务的IPV6功能.设置完毕之后,可以选择性的使用IPV4,IPV6协议.
+
+  注意: IPV6 只支持Linux下运行
+
+  1. 编写`/etc/docker/daemon.json`设置`ipv6`为`true`
+
+     ```json
+     {
+         "ipv6": true
+     }
+     ```
+
+     保存文件
+
+  2. 重载docker配置文件
+
+     ```shell
+     $ systemctl reload docker
+     ```
+
+     这样就可以创建IPV6网络了,可以指定容器的网络为IPV6网络通过设置`--ip6`标记.
+
++ docker和ip地址表
+
+  Linux系统上,docker操作ip地址映射表用于进行网络隔离.你不能通过插入到你的`iptables`协议来修改规则.
+
+  + docker之前添加ip地址表协议
+
+    所有docker的`iptables`规则都会被加入到docker任务链中.不要手动的操作这个表,如果你需要添加规则,并重载docker规则.将其添加到`DOCKER_USER`任务链中.这些规则会在docker创建之前自动加载.
+
+  + 限制docker启动器的连接
+
+    默认情况下,外部IP资源允许连接到docker启动器上.为了允许指定ip或者网络,再docker过滤任务链中加入一条反规则,例如,限制外部IP连接,除了192.168.1.1
+
+    ```shell
+    $ iptables -I DOCKER-USER -i ext_if ! -s 192.168.1.1 -j DROP
+    ```
+
+    注意你需要改变`ext_if`去应对主机实际外部接口.你可以允许资源子网的外部连接,下述规则只允许子网`192.168.1.0/24`
+
+    ```shell
+    $ iptables -I DOCKER-USER -i ext_if ! -s 192.168.1.0/24 -j DROP
+    ```
+
+    最后,你可以指定外部IP地址范围,使用`--src-range`或者`--dst-range`时记得添加`-m iprange`.
+
+    ```shell
+    $ iptables -I DOCKER-USER -m iprange -i ext_if ! --src-range 192.168.1.1-192.168.1.3 -j DROP
+    ```
+
+    可以合并`-s`或者`--src-range`使用`-d`或者`--dst-range`去控制资源和目标地址.例如,docker启动器监听到192.168.1.99和10.1.2.3,你可以制作规则监听`10.1.2.3`而不监听`192.168.1.99`.
+
+    `iptable`是复杂的,参考这份[文档](https://www.netfilter.org/documentation/HOWTO/NAT-HOWTO.html)获取更多信息.
+
+  + 阻止docker操作ip地址表
+
++ 容器网络
+
++ 配置docker的代理服务器
 
 #### 合法网络内容
