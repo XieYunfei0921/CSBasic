@@ -202,7 +202,7 @@
      cd node-bulletin-board/bulletin-board-app
      ```
 
-     这是一个简单的看板程序,使用node.js写的.示例中,你不需要对它容器化,开始想象你写的app.
+     ：这是一个简单的看板程序,使用node.js写的.示例中,你不需要对它容器化,开始想象你写的app.
 
    +  看看文件的DockerFile,这个文件描述了如何去组装文件系统,你也可以加入一些元数据,用于描述在镜像中如何去运行容器.这个App的Dockerfile如下
 
