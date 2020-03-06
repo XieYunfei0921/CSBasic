@@ -48,16 +48,16 @@ docker存在有两项配置，用于存储文件到主机上。所以文件在�
    >   +  `readonly`属性,如果存在会使用只读的方式绑定到容器中
    >   +  `volume-option`属性,可以指定超过一次,采样kv对的配置方式
 
-   	>如果数据卷驱动器接受了一个逗号分隔的配置,必须要去除掉外部csv转换器的值.需要去除的参数使用双引号`"`包围,整个参数部分使用单引号`'`包围.
-   	>
-   	>例如,本地驱动器接受了一个参数列表,下述例子正确的处理去除参数的配置
-   	>
-   	>```shell
-   	>$ docker service create \
-   	>     --mount 'type=volume,src=<VOLUME-NAME>,dst=<CONTAINER-PATH>,volume-driver=local,volume-opt=type=nfs,volume-opt=device=<nfs-server>:<nfs-path>,"volume-opt=o=addr=<nfs-address>,vers=4,soft,timeo=180,bg,tcp,rw"'
-   	>    --name myservice \
-   	>    <IMAGE>
-   	>```
+   >如果数据卷驱动器接受了一个逗号分隔的配置,必须要去除掉外部csv转换器的值.需要去除的参数使用双引号`"`包围,整个参数部分使用单引号`'`包围.
+   >
+   >例如,本地驱动器接受了一个参数列表,下述例子正确的处理去除参数的配置
+   >
+   >```shell
+   >$ docker service create \
+   >     --mount 'type=volume,src=<VOLUME-NAME>,dst=<CONTAINER-PATH>,volume-driver=local,volume-opt=type=nfs,volume-opt=device=<nfs-server>:<nfs-path>,"volume-opt=o=addr=<nfs-address>,vers=4,soft,timeo=180,bg,tcp,rw"'
+   >    --name myservice \
+   >    <IMAGE>
+   >```
 
    支持使用`--mount`标签
 
@@ -429,16 +429,12 @@ docker存在有两项配置，用于存储文件到主机上。所以文件在�
 
 2. 绑定挂载启动
 
-   Consider a case where you have a directory `source` and that when you build the source code, the artifacts are saved into another directory, `source/target/`. You want the artifacts to be available to the container at `/app/`, and you want the container to get access to a new build each time you build the source on your development host. Use the following command to bind-mount the `target/` directory into your container at `/app/`. Run the command from within the `source` directory. The `$(pwd)` sub-command expands to the current working directory on Linux or macOS hosts.
-
-   The `--mount` and `-v` examples below produce the same result. You can’t run them both unless you remove the `devtest` container after running the first one.
-
    考虑到已经创建了`source`目录,构建出的内容会保存到`source/target`目录下,如果需要自定义绑定可以通过下述指令完成.注意,`&pwd`子指令扩展了当前工作目录到linux和MacOS上.
 
    ```shell
-   # 使用mount
+# 使用mount
    $ docker run -d \
-     -it \
+  -it \
      --name devtest \
      --mount type=bind,source="$(pwd)"/target,target=/app \ # 指令了挂载目标位置为/app
      nginx:latest
@@ -449,13 +445,13 @@ docker存在有两项配置，用于存储文件到主机上。所以文件在�
      -v "$(pwd)"/target:/app \
      nginx:latest
    ```
-
+   
    检查挂载位置是否执行成功
-
+   
    ```shell
-   "Mounts": [
+"Mounts": [
        {
-           "Type": "bind",
+        "Type": "bind",
            "Source": "/tmp/source/target",
            "Destination": "/app",
            "Mode": "",
@@ -464,22 +460,22 @@ docker存在有两项配置，用于存储文件到主机上。所以文件在�
        }
    ],
    ```
-
+   
    关闭容器
-
+   
    ```shell
-   $ docker container stop devtest
+$ docker container stop devtest
    $ docker container rm devtest
-   ```
-
+```
+   
    + 挂载到容器中的非空目录
-
+   
      如果你挂载到一个非空目录中,目录中存在有绑定加载覆盖的内容部分.使用这个是比较有利的.下述示例使用`tmp`目录覆盖了容器中的`/usr`目录.在多数情况下,会使得容器功能丧失.
 
      ```shell
-     # -v
+  # -v
      $ docker run -d \
-       -it \
+    -it \
        --name broken-container \
        -v /tmp:/usr \
        nginx:latest
@@ -498,11 +494,11 @@ docker存在有两项配置，用于存储文件到主机上。所以文件在�
      starting container process caused "exec: \"nginx\": executable file not found in $PATH".
      
      ```
-
+   
      容器此时创建完成,但是没有启动,直接移除即可
-
+   
      ```shell
-     $ docker container rm broken-container
+  $ docker container rm broken-container
      ```
 
 3. 使用只读的绑定挂载
@@ -548,52 +544,42 @@ docker存在有两项配置，用于存储文件到主机上。所以文件在�
 
 4. 配置绑定属性
 
-   Bind propagation defaults to `rprivate` for both bind mounts and volumes. It is only configurable for bind mounts, and only on Linux host machines. Bind propagation is an advanced topic and many users never need to configure it.
-
-   Bind propagation refers to whether or not mounts created within a given bind-mount or named volume can be propagated to replicas of that mount. Consider a mount point `/mnt`, which is also mounted on `/tmp`. The propagation settings control whether a mount on `/tmp/a` would also be available on `/mnt/a`. Each propagation setting has a recursive counterpoint. In the case of recursion, consider that `/tmp/a` is also mounted as `/foo`. The propagation settings control whether `/mnt/a` and/or `/tmp/a` would exist.
-
    在绑定加载和数据卷模式下,默认的绑定属性为`rprivate`.表示仅仅用于绑定配置,且只能用于linux上.绑定权限是个高级topic,大多数用户不需要使用.
 
    绑定传输属性指的是是否使用给定的绑定加载/命名数据卷会创建挂载的副本.考虑到挂载点`/mnt`,同时也会挂载到`tmp`上.当挂载到`/tmp/a`也会挂载到`/mnt/a`上,每次传输都有迭代计数.在迭代的情况下,`/tmp/a`作为`/foo`的挂载.
 
    | 传输属性   | 描述                                                         |
-   | ---------- | ------------------------------------------------------------ |
+| ---------- | ------------------------------------------------------------ |
    | `shared`   | 原始挂载的子挂载作为副本挂载,副本挂载的子挂载传输给原始挂载. |
-   | `slave`    | 类似于共享挂载`shared`,但是仅仅在一个方向上.即如果原始挂载暴露了子挂载,那么副本是可以看到的.但是如果副本挂载保留了一个子挂载,原始挂载是找不到这个挂载的. |
+| `slave`    | 类似于共享挂载`shared`,但是仅仅在一个方向上.即如果原始挂载暴露了子挂载,那么副本是可以看到的.但是如果副本挂载保留了一个子挂载,原始挂载是找不到这个挂载的. |
    | `private`  | 挂载是私有的,子挂载不会暴露给副本挂载.副本挂载的子挂载不会保留给原始挂载 |
    | `rshared`  | 与`shared`类型类似.但是传输上进行了扩展,可以支持多副本挂载点与原始挂载的共享. |
    | `rslave`   | 与`slave`类似,扩展为可以看到多个挂载点                       |
    | `rprivate` | 默认情况,没有原始挂载点与副本挂载点直接是可以互相看到的.     |
-
-   Before you can set bind propagation on a mount point, the host filesystem needs to already support bind propagation.
-
-   For more information about bind propagation, see the [Linux kernel documentation for shared subtree](https://www.kernel.org/doc/Documentation/filesystems/sharedsubtree.txt).
-
-   The following example mounts the `target/` directory into the container twice, and the second mount sets both the `ro` option and the `rslave` bind propagation option.
-
+   
    在你设置挂载点的绑定传输时,主机文件系统需要支持绑定创数.关于绑定传输可以参考:
-
+   
    <(https://www.kernel.org/doc/Documentation/filesystems/sharedsubtree.txt>
 
    下述示例绑定了`target`目录到容器两次,第二次绑定设置了`ro`属性,和`rslave`传输属性
 
    ```shell
-   # -v
+# -v
    $ docker run -d \
-     -it \
+  -it \
      --name devtest \
-     -v "$(pwd)"/target:/app \
+  -v "$(pwd)"/target:/app \
      -v "$(pwd)"/target:/app2:ro,rslave \
-     nginx:latest
+  nginx:latest
    # --mount
-   $ docker run -d \
+$ docker run -d \
      -it \
      --name devtest \
      --mount type=bind,source="$(pwd)"/target,target=/app \
      --mount type=bind,source="$(pwd)"/target,target=/app2,readonly,bind-propagation=rslave \
      nginx:latest
    ```
-
+   
 5. 配置selinux标签
 
    使用`selinux`时,可以添加`z`或者`Z`属性,修改selinux主机挂载文件/目录标签
@@ -614,10 +600,135 @@ docker存在有两项配置，用于存储文件到主机上。所以文件在�
 
 #### 临时文件系统挂载
 
-1.  临时文件系统绑定的限制
-2.  `--tmpfs`和`--mount`标签的区别
+1. 临时文件系统绑定的限制
+
+   + 与数据卷和绑定挂载不同，不可以使用`tmpfs`进行容器之间的共享
+   + 只能在linux操作系统下使用
+
+2. `--tmpfs`和`--mount`标签的区别
+
+   原始情况下,`--tmpfs`标记用于独立容器,且`--mount`用于swarm服务.Docker 17.06之后的版本,可以在度量容器中使用`--mount`标记.总体来说`--mount`参数具有较高的可识别性,且`--tmpfs`不支持可配置参数的配置
+
+   + `--tmpfs`: 不允许去指定配置项,只能用于独立容器
+   + `--mount`:包含多个kv对参数列表
+     1.  `type`表示挂载的类型，可以选择`bind`,`volume`或者`tmpfs`三种类型
+     2. `destination`指定挂载的位置,还可以使用`dst`,`target`指定
+     3. `tmpfs-size`和`tmpfs-mode`配置
+
+   优先使用`--mount`标签
+
 3. 容器中使用`tmpfs`绑定
+
+   使用`--tmpfs`或者`--mount`将`tmpfs`绑定到容器中.使用`tmpfs`绑定是不存在有`source`项的.下述示例创建了一个Nginx容器中的`/app`下的`tmpfs`挂载.
+
+   ```shell
+   # mount
+   $ docker run -d \
+     -it \
+     --name tmptest \
+     --mount type=tmpfs,destination=/app \
+     nginx:latest
+   # tmpfs
+   $ docker run -d \
+     -it \
+     --name tmptest \
+     --tmpfs /app \
+     nginx:latest
+   ```
+
+   使用`docker container inspect tmptest`验证绑定情况
+
+   ```shell
+   "Tmpfs": {
+       "/app": ""
+   },
+   ```
+
+   移除容器
+
+   ```shell
+   $ docker container stop tmptest
+   $ docker container rm tmptest
+   ```
+
+   + 指定的tmpfs参数
+
+     `tmpfs` mounts allow for two configuration options, neither of which is required. If you need to specify these options, you must use the `--mount` flag, as the `--tmpfs` flag does not support them.
+
+     `tmpfs`挂载允许两种配置属性,如果你需要指定参数,必须使用`--mount`标签,因为`--tmpfs`不支持.
+
+     | 配置项       | 描述                                                      |
+     | ------------ | --------------------------------------------------------- |
+     | `tmpfs-size` | 挂载大小(字节数)                                          |
+     | `tmpfs-mode` | 八进制文件读写木事,例如0770.默认情况下是1777,表示全局可写 |
+
+     设置模式为`1770`,这个在容器内部不是全局可写的.
+
+     ```shell
+     docker run -d \
+       -it \
+       --name tmptest \
+       --mount type=tmpfs,destination=/app,tmpfs-mode=1770 \
+       nginx:latest
+     ```
 
 #### 排除故障数据卷
 
+这里讨论溢写使用docker数据卷时常见的错误
+
+`Error: Unable to remove filesystem`
+
+一些基于容器的使用,比如`Google cAdvisot`,挂载到docker系统的目录上,假设这个目录为`/var/lib/docker`/.文档中建议你按照下述方法运行`cadvisor`容器
+
+```shell
+$ sudo docker run \
+  --volume=/:/rootfs:ro \
+  --volume=/var/run:/var/run:rw \
+  --volume=/sys:/sys:ro \
+  --volume=/var/lib/docker/:/var/lib/docker:ro \
+  --publish=8080:8080 \
+  --detach=true \
+  --name=cadvisor \
+  google/cadvisor:latest
+```
+
+当你绑定到这个目录时,高效绑定所有资源,作为容器的文件系统.如果你需要移除某个容器.请求会失败.
+
+```shell
+Error: Unable to remove filesystem for
+74bef250361c7817bee19349c93139621b272bc8f654ae112dd4eb9652af9515:
+remove /var/lib/docker/containers/74bef250361c7817bee19349c93139621b272bc8f654ae112dd4eb9652af9515/shm:
+Device or resource busy
+```
+
+问题发生在当容器绑定到`/var/lib/docker/`上的时候,使用`statfs`或者`fstatfs`在文件系统上处理`/var/lib/docker`但是并没有关闭.
+
+建议这种情况下不要使用绑定挂载,因为绑定挂载需要CPU支持.
+
+如果你不确定进程是否出现上述情况,可以使用`lsof`命令找到这个进程.(这里使用的是上面挂载位置)
+
+```shell
+$ sudo lsof /var/lib/docker/containers/74bef250361c7817bee19349c93139621b272bc8f654ae112dd4eb9652af9515/shm
+```
+
 #### 容器内存储数据
+
+1.  存储驱动器
+
+   为了能够高效的使用存储驱动器,了解docker是如何构建,以及存储镜像,还有镜像如何使用容器的就比较重要了.可以使用这些信息使得你的应用具有最优的持久化数据选择.且避免一些性能问题.
+
+   存储驱动器允许在容器可写层创建数据,数据持久化之后不会持久化,读写速度都比本地文件系统要慢.
+
+2.  选择存储驱动器
+
+3.  使用AUFS存储驱动器
+
+4.  使用Btrfs存储驱动器
+
+5.  使用设备映射存储驱动器
+
+6.  使用Overlay存储驱动器
+
+7.  使用ZFS存储驱动器
+
+8.  使用VFS存储驱动器
