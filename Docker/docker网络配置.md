@@ -446,11 +446,9 @@ $ docker network create -d overlay --attachable my-attachable-overlay
 
 2. 主机网络配置
 
-   https://docs.docker.com
-
    + [官方教程](https://docs.docker.com/network/network-tutorial-host/)
-   + [本地教程](http://127.0.0.1:4000/network/network-tutorial-host/)
-
++ [本地教程](http://127.0.0.1:4000/network/network-tutorial-host/)
+  
 3. 覆盖网络配置
 
    + [官方教程](https://docs.docker.com/network/network-tutorial-overlay/)
@@ -523,6 +521,54 @@ $ docker network create -d overlay --attachable my-attachable-overlay
 
 + 容器网络
 
-+ 配置docker的代理服务器
+  在容器内部，使用网桥网络，覆盖网络，MAC VLAN网络或者是网络插件是可见的。对于容器的角度来看，带有IP地址，网关，路由表，DNS服务和其他网络细节的网络接口。
 
-#### 合法网络内容
+  + 发布端口
+
+    默认情况下，创建一个容器的时候，不会发布端口到外部，为了使得docker服务在外部可见。或者对于docker容器来说，外部没有连接到容器网络上。使用`--publish`或者`-p`标记.这个会创建防火墙配置,这个配置可以映射容器端口到docker主机上.
+
+    参考下述示例:
+
+    | Flag Value                      | Description                                               |
+    | ------------------------------- | --------------------------------------------------------- |
+    | `-p 8080:80`                    | 映射TCP 80端口到主机的8080端口                            |
+    | `-p 192.168.1.100:8080:80`      | 映射TCP80 端口到192.168.1.100的8080端口                   |
+    | `-p 8080:80/udp`                | 映射UDP 80端口到主机的8080端口                            |
+    | `-p 8080:80/tcp -p 8080:80/udp` | 映射TCP 80端口到主机8080端口,映射UDP 80端口到主机8080端口 |
+
+  + IP地址和主机名称
+
+    默认情况下，对于docker网络连接的容器，容器指定IP地址，以便于docker启动器可以高效的作为DHCP进行交互。每个网络都有默认的子网掩码个网关。
+
+    容器启东市，可以连接到单个网络，使用`--network`.但是,你可以连接运行中的容器,从而使用`docker network connect`进行网络连接.当你使用`--network`标记开始一个容器的时候.可以指定ip地址通过`--ip`或者`--ipv6`(连接IPV 6).
+
+    使用`docker network connect`可以在已经存在的网络上连接新的网络,通过`--ip`或者`--ip6`标记指定IP地址.
+
+    相同的,容器主机名默认为容器的ID.可以使用`--hostname`重新标记,当连接到存在网络时`docker network connect`,可以使用`alias`标记指定容器的额外网络列表.
+
+  + DNS服务
+
+    默认情况下,容器继承docker主机的DNS配置,包括`/etc/hosts`和`/etc/resolv.conf`.可以在容器的基础上,进行覆盖写入.
+
+    | Flag           | Description                                                  |
+    | -------------- | ------------------------------------------------------------ |
+    | `--dns`        | DNS服务器的IP地址,使用`--dns`指定多个DNS服务器,容器不能包含你指定的地址,默认情况下包含`8.8.8.8`,这样你的容器可以解决网络域名解析. |
+    | `--dns-search` | DNS搜索域名,为了指定操作DNS搜索前缀,使用`--dns-search`标记   |
+    | `--dns-opt`    | 以kv对的形式,代表DNS配置,参考自己操作系统的`resolv.conf`配置 |
+    | `--hostname`   | 容器自己的主机名,默认为容器ID                                |
+
+  + 代理服务器
+
+    1.  [本地文档](http://127.0.0.1:4000/network/proxy/)
+    2.  [远程文档](https://docs.docker.com/network/proxy/)
+
+
+#### 传统网络内容
+
++ [容器链接](http://127.0.0.1:4000/network/links/)
+
+    [远程链接](https://docs.docker.com/network/links/)
+
++ [swarm服务的覆盖网络](http://127.0.0.1:4000/network/overlay-standalone.swarm/)
+
+  [远程链接](https://docs.docker.com/network/overlay-standalone.swarm/)
