@@ -431,7 +431,7 @@ docker存在有两项配置，用于存储文件到主机上。所以文件在�
 
    考虑到已经创建了`source`目录,构建出的内容会保存到`source/target`目录下,如果需要自定义绑定可以通过下述指令完成.注意,`&pwd`子指令扩展了当前工作目录到linux和MacOS上.
 
-   ```shell
+```shell
 # 使用mount
    $ docker run -d \
   -it \
@@ -444,10 +444,10 @@ docker存在有两项配置，用于存储文件到主机上。所以文件在�
      --name devtest \
      -v "$(pwd)"/target:/app \
      nginx:latest
-   ```
-   
+```
+
    检查挂载位置是否执行成功
-   
+
    ```shell
 "Mounts": [
        {
@@ -460,19 +460,19 @@ docker存在有两项配置，用于存储文件到主机上。所以文件在�
        }
    ],
    ```
-   
+
    关闭容器
-   
+
    ```shell
 $ docker container stop devtest
    $ docker container rm devtest
-```
-   
+   ```
+
    + 挂载到容器中的非空目录
    
      如果你挂载到一个非空目录中,目录中存在有绑定加载覆盖的内容部分.使用这个是比较有利的.下述示例使用`tmp`目录覆盖了容器中的`/usr`目录.在多数情况下,会使得容器功能丧失.
 
-     ```shell
+```shell 
   # -v
      $ docker run -d \
     -it \
@@ -493,13 +493,11 @@ $ docker container stop devtest
      docker: Error response from daemon: oci runtime error: container_linux.go:262:
      starting container process caused "exec: \"nginx\": executable file not found in $PATH".
      
-     ```
-   
-     容器此时创建完成,但是没有启动,直接移除即可
-   
-     ```shell
+```
+容器此时创建完成,但是没有启动,直接移除即可    
+```shell
   $ docker container rm broken-container
-     ```
+```
 
 3. 使用只读的绑定挂载
 
@@ -563,7 +561,7 @@ $ docker container stop devtest
 
    下述示例绑定了`target`目录到容器两次,第二次绑定设置了`ro`属性,和`rslave`传输属性
 
-   ```shell
+```shell
 # -v
    $ docker run -d \
   -it \
@@ -578,8 +576,8 @@ $ docker run -d \
      --mount type=bind,source="$(pwd)"/target,target=/app \
      --mount type=bind,source="$(pwd)"/target,target=/app2,readonly,bind-propagation=rslave \
      nginx:latest
-   ```
-   
+```
+
 5. 配置selinux标签
 
    使用`selinux`时,可以添加`z`或者`Z`属性,修改selinux主机挂载文件/目录标签
@@ -713,22 +711,73 @@ $ sudo lsof /var/lib/docker/containers/74bef250361c7817bee19349c93139621b272bc8f
 
 #### 容器内存储数据
 
-1.  存储驱动器
+1. 存储驱动器
 
    为了能够高效的使用存储驱动器,了解docker是如何构建,以及存储镜像,还有镜像如何使用容器的就比较重要了.可以使用这些信息使得你的应用具有最优的持久化数据选择.且避免一些性能问题.
 
    存储驱动器允许在容器可写层创建数据,数据持久化之后不会持久化,读写速度都比本地文件系统要慢.
 
-2.  选择存储驱动器
+   + 镜像和层
 
-3.  使用AUFS存储驱动器
+     docker镜像有多个层构建而成，每层代表镜像dockerfile的一个构建指令。每层都是只读的，参考下述dockerfile文件：
 
-4.  使用Btrfs存储驱动器
+     ```dockerfile
+     FROM ubuntu:18.04
+     COPY . /app
+     RUN make /app
+     CMD python /app/app.py
+     ```
 
-5.  使用设备映射存储驱动器
+     docker文件中有4个指令,每个指令创建一个层.分别是:
 
-6.  使用Overlay存储驱动器
+     1.  `FROM`由基础镜像`ubuntu:18.04`创建层
+     2. `COPY`添加文件到docker客户端目录中
+     3. `RUN`使用make指令构建应用
+     4. `CMD`指定容器中运行的指令
 
-7.  使用ZFS存储驱动器
+     每层仅仅是与上一层的不同部分,层是堆叠在之前的层之上的.当你创建一个新的容器的时候,在底层上创建一个新的可写层.这个叫做**容器层**.所有对运行中容器的改变(写新文件,修改存在的文件,删除文件),都会写到这个薄的容器层中.如图所示:
 
-8.  使用VFS存储驱动器
+     <img src="E:\截图文件\层的建立.png" style="zoom:67%;" />
+
+2. 选择存储驱动器
+
+   容器和镜像之间主要的不同是顶层的可写层.新增或者修改现存与可写层会写到容器中.但是底层的镜像是不会发生变化的.
+
+   由于每个容器都有可写层,所有对容器可写层的改变都会存储到可写层中.多个容器可以共享同一个底层镜像,然而数据状态则是独立的.下图标示量Ubuntu 18.04镜像的共享示意图:
+
+   <img src="E:\截图文件\镜像与容器的关系.png" style="zoom:67%;" />
+
+   如果需要对个镜像共享相同的数据，将数据存储到docker的数据卷中，并将其挂载到容器中。
+
+   docker使用存储驱动器，去管理镜像层和容器可写层的内容，每个存储驱动器处理的实现时不同的，但是所有驱动器使用堆叠的镜像层，且使用写时拷贝(CoW)策略.
+
+   + 此外上的容器大小
+
+     为了查看运行容器的合适大小,可以使用`docker ps -s`指令查看先关大小
+
+     + `size`: 磁盘数据的数量,用于每个容器的可写层
+     + `virtual size`: 用于只读镜像数据的数量(容器加上容器可写层的大小).多个容器可以共享多个只读镜像数据.两个容器开始于同样的镜像共享100%只读数据,两个不同降镜像的容器可以共享相同的可写层.因此,不能只计算合计的虚拟容器大小.
+
+     This also does not count the following additional ways a container can take up disk space:
+
+     - Disk space used for log files if you use the `json-file` logging driver. This can be non-trivial if your container generates a large amount of logging data and log rotation is not configured.
+     - Volumes and bind mounts used by the container.
+     - Disk space used for the container’s configuration files, which are typically small.
+     - Memory written to disk (if swapping is enabled).
+     - Checkpoints, if you’re using the experimental checkpoint/restore feature.
+
+     磁盘上运行容器的总计磁盘空间时每个容器大小与虚拟存储大小之和.如果多个容器起始于一个确定的镜像.容器的磁盘总大小会变成容器实际大小+虚拟空间大小.
+
+     
+
+3. 使用AUFS存储驱动器
+
+4. 使用Btrfs存储驱动器
+
+5. 使用设备映射存储驱动器
+
+6. 使用Overlay存储驱动器
+
+7. 使用ZFS存储驱动器
+
+8. 使用VFS存储驱动器
