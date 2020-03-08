@@ -758,26 +758,242 @@ $ sudo lsof /var/lib/docker/containers/74bef250361c7817bee19349c93139621b272bc8f
      + `size`: 磁盘数据的数量,用于每个容器的可写层
      + `virtual size`: 用于只读镜像数据的数量(容器加上容器可写层的大小).多个容器可以共享多个只读镜像数据.两个容器开始于同样的镜像共享100%只读数据,两个不同降镜像的容器可以共享相同的可写层.因此,不能只计算合计的虚拟容器大小.
 
-     This also does not count the following additional ways a container can take up disk space:
-
-     - Disk space used for log files if you use the `json-file` logging driver. This can be non-trivial if your container generates a large amount of logging data and log rotation is not configured.
-     - Volumes and bind mounts used by the container.
-     - Disk space used for the container’s configuration files, which are typically small.
-     - Memory written to disk (if swapping is enabled).
-     - Checkpoints, if you’re using the experimental checkpoint/restore feature.
-
      磁盘上运行容器的总计磁盘空间时每个容器大小与虚拟存储大小之和.如果多个容器起始于一个确定的镜像.容器的磁盘总大小会变成容器实际大小+虚拟空间大小.
 
+     下述方式也会占用磁盘空间：
      
+     + 使用`json-file`对驱动器进行日志记录,那么磁盘上就需要有这些日志记录文件的空间.
+     + 数据卷和容器绑定挂载
+     + 容器配置文件,一般情况下比较小
+   +  内存交换的内容(如果开启了内存交换)
+   
++ 检查点(如果你使用检查点,用于恢复数据)
+  
++ 写时拷贝策略(CoW)
+  
+  **写时拷贝**策略是为了达到高效的共享和复制文件.如果文件存在于镜像的底层,其他层(包括可写层)需要读取.他使用存在的文件.其他层首次需要修改文件时(构建和运行容器的时候),文件被拷贝到那一层并进行修改.使得每个结果层的IO最小化.
+  
+  + 共享更小的镜像
+  
+    当使用`docker pull`指令去从库中拉取镜像的时候,或者根据镜像创建不存在的容器的时候,每一层都会单独的被拉取下来,且存储在docker本地存储区域中,使用`/var/lib/docker`的目录上.下述以ubuntun作为示例:
+  
+       ```shell
+       $ docker pull ubuntu:18.04
+       18.04: Pulling from library/ubuntu
+       f476d66f5408: Pull complete
+       8882c27f669e: Pull complete
+       d9af21273955: Pull complete
+       f5029279ec12: Pull complete
+       Digest: sha256:ab6cb8de3ad7bb33e2534677f865008535427390b117d7939193f8d1a6613e34
+       Status: Downloaded newer image for ubuntu:18.04
+       ```
+  
+    每层都存储在docker主机本地存储区域的目录中.为了检测文件系统的层,列举`/var/lib/docker/<storage-driver>`的内容,这个例子使用`overlay2`存储驱动器.
+  
+       ```shell
+       $ ls /var/lib/docker/overlay2
+       16802227a96c24dcbeab5b37821e2b67a9f921749cd9a2e386d5a6d5bc6fc6d3
+       377d73dbb466e0bc7c9ee23166771b35ebdbe02ef17753d79fd3571d4ce659d7
+       3f02d96212b03e3383160d31d7c6aeca750d2d8a1879965b89fe8146594c453d
+       ec1ec45792908e90484f7e629330666e7eee599f08729c93890a7205a6ba35f5
+       l
+       ```
+  
+    The directory names do not correspond to the layer IDs (this has been true since Docker 1.10).
+  
+    Now imagine that you have two different Dockerfiles. You use the first one to create an image called `acme/my-base-image:1.0`.
+  
+    目录不会对层编号做出显示.有两个不同的dockerfile,第一个创建一个`acme/my-base-image:1.0`的镜像.
+  
+       ```dockerfile
+       FROM ubuntu:18.04
+       COPY . /app
+       ```
+  
+    第二个镜像基于第一个镜像创建,但是还有其他额外的层
+  
+       ```dockerfile
+       FROM acme/my-base-image:1.0
+       CMD /app/hello.sh
+       ```
+  
+    第二个镜像中包含第一个镜像的所有层,使用`CMD`指令添加新的层,且是一个读写权限的容器层.docker含有第一个镜像的所有层,所以不需要再拉取了.两个镜像共享相同的层.
+  
+    如果使用两个docker文件构建镜像,可以使用`docker image ls`和`docker history`指令确认加密ID和共享层是否一致.
+  
+    1.  创建`cow-test/`目录,并切换到目录中
+  
+    2. 在目录中,创建`hello.sh`文件
+  
+          ```shell
+          #!/bin/sh
+          echo "Hello world"
+       ```
+  
+       修改执行权限
+  
+          ```shell
+          chmod +x hello.sh
+          ```
+  
+    3. 拷贝第一个dockerfile到一个新的文件`Dockerfile.base`中
+  
+    4. 拷贝第二个文件到一个新文件`Dockerfile`中
+  
+    5. 在`cow-test`目录下,构建第一个镜像,设置`PATH`,告知docker在何处添加镜像
+  
+          ```shell
+          $ docker build -t acme/my-base-image:1.0 -f Dockerfile.base .
+          Sending build context to Docker daemon  812.4MB
+          Step 1/2 : FROM ubuntu:18.04
+           ---> d131e0fa2585
+          Step 2/2 : COPY . /app
+           ---> Using cache
+           ---> bd09118bcef6
+          Successfully built bd09118bcef6
+          Successfully tagged acme/my-base-image:1.0
+       ```
+  
+    6. 构建第二个镜像
+  
+          ```shell
+          $ docker build -t acme/my-final-image:1.0 -f Dockerfile .
+          Sending build context to Docker daemon  4.096kB
+          Step 1/2 : FROM acme/my-base-image:1.0
+           ---> bd09118bcef6
+          Step 2/2 : CMD /app/hello.sh
+           ---> Running in a07b694759ba
+           ---> dbf995fc07ff
+          Removing intermediate container a07b694759ba
+          Successfully built dbf995fc07ff
+          Successfully tagged acme/my-final-image:1.0
+       ```
+  
+    7.  检查镜像的大小
+  
+          ```shell
+          $ docker image ls
+          REPOSITORY                         TAG                     IMAGE ID            CREATED             SIZE
+          acme/my-final-image                1.0                     dbf995fc07ff        58 seconds ago      103MB
+          acme/my-base-image                 1.0                     bd09118bcef6  
+          ```
+  
+    8. 检查每个镜像的层信息
+  
+          ```shell
+          $ docker history bd09118bcef6
+          IMAGE               CREATED             CREATED BY                                      SIZE                COMMENT
+          bd09118bcef6        4 minutes ago       /bin/sh -c #(nop) COPY dir:35a7eb158c1504e...   100B                
+          d131e0fa2585        3 months ago        /bin/sh -c #(nop)  CMD ["/bin/bash"]            0B                  
+          <missing>           3 months ago        /bin/sh -c mkdir -p /run/systemd && echo '...   7B                  
+          <missing>           3 months ago        /bin/sh -c sed -i 's/^#\s*\(deb.*universe\...   2.78kB              
+          <missing>           3 months ago        /bin/sh -c rm -rf /var/lib/apt/lists/*          0B                  
+          <missing>           3 months ago        /bin/sh -c set -xe   && echo '#!/bin/sh' >...   745B                
+          <missing>           3 months ago        /bin/sh -c #(nop) ADD file:eef57983bd66e3a...   103MB      
+       ```
+  
+          ```shell
+          $ docker history dbf995fc07ff
+          IMAGE               CREATED             CREATED BY                                      SIZE                COMMENT
+          dbf995fc07ff        3 minutes ago       /bin/sh -c #(nop)  CMD ["/bin/sh" "-c" "/a...   0B                  
+          bd09118bcef6        5 minutes ago       /bin/sh -c #(nop) COPY dir:35a7eb158c1504e...   100B                
+          d131e0fa2585        3 months ago        /bin/sh -c #(nop)  CMD ["/bin/bash"]            0B                  
+          <missing>           3 months ago        /bin/sh -c mkdir -p /run/systemd && echo '...   7B                  
+          <missing>           3 months ago        /bin/sh -c sed -i 's/^#\s*\(deb.*universe\...   2.78kB              
+          <missing>           3 months ago        /bin/sh -c rm -rf /var/lib/apt/lists/*          0B                  
+          <missing>           3 months ago        /bin/sh -c set -xe   && echo '#!/bin/sh' >...   745B                
+          <missing>           3 months ago        /bin/sh -c #(nop) ADD file:eef57983bd66e3a...   103MB  
+          ```
+  
+       注意所有的层都被标识处理,处理第二个镜像的顶层.且其他层,两个进行共享,仅仅存储在`/var/lib/docker`中,新的层不占用任何空间,因为不改变任何文件,仅仅运行了一个指令.
+  
+          > 注意: `docker history`丢失的行内容会建立在其他文件系统上,且本地不可以获取.这个可以忽略
 
-3. 使用AUFS存储驱动器
+  + 高效拷贝构建的容器
+  
+    开启容器的时候,一个薄的可写容器层放置在其他层的顶部,所有对文件系统的修改防止在这之上,不会修改的文件不会复制到可写层上.这意味着可写层越小越好.
+  
+    当容器中存在的文件修改的时候,存储驱动器使用**cow策略**.指定步骤依赖于指定的存储驱动器.对于`aufs`,`overlay`和`overlay2`驱动器,cow策略遵循下述特征:
+  
+    - 寻找需要更新文件的镜像层,进程起始于最新的层,且基于基础层工作.当结果找到的时候,添加到缓存中,用于加速任务的操作.
+    - 在第一个文件找到的时候进行`copy_up`操作,将文件拷贝到容器的可写层.
+    - 对文件副本做的修改和容器不可以获取到到存在于底层中的只读副本.
+  
+    Brtfs,ZFS和其他驱动器处理cow的方式不同,可以在阅读相应的处理方法.
+  
+    写大量数据的容器需要占有更多的空间,因为写操作约到,消费顶层可写层的空间越大.
+  
+    > 注意: 对于重载应用,不能在容器内存储数据,相反,使用docker数据卷,这个独立于运行容器,设置于高效IO.紫外,数据卷在容器之间共享,且不会增加可写层的大小
+  
+  见的性能开销提升,这里的开销随着存储驱动器的不同而改变.具有多层的大文件和深层目录可能产生更深的提升.每个操作仅仅发生在文件第一次被修改的时候.
+  
+  为了证实cow工作方式,下述程序在`acme/my-final-image:1.0`上旋转获得5个容器。注意在Mac和windows平台上无法使用。
+  
+  1. 从docker主机的终端,运行`docker run`指令
+  
+  ```shell
+  $ docker run -dit --name my_container_1 acme/my-final-image:1.0 bash \
+    && docker run -dit --name my_container_2 acme/my-final-image:1.0 bash \
+    && docker run -dit --name my_container_3 acme/my-final-image:1.0 bash \
+    && docker run -dit --name my_container_4 acme/my-final-image:1.0 bash \
+    && docker run -dit --name my_container_5 acme/my-final-image:1.0 bash
+  
+    c36785c423ec7e0422b2af7364a7ba4da6146cbba7981a0951fcc3fa0430c409
+    dcad7101795e4206e637d9358a818e5c32e13b349e62b00bf05cd5a4343ea513
+    1e7264576d78a3134fbaf7829bc24b1d96017cf2bc046b7cd8b08b5775c33d0c
+    38fa94212a419a082e6a6b87a8e2ec4a44dd327d7069b85892a707e3fc818544
+    1a174fc216cccf18ec7d4fe14e008e30130b11ede0f0f94a87982e310cf2e765
+  ```
+  
+  2. 运行`docker ps`检查五个容器正在运行
+  
+     ```shell
+     CONTAINER ID      IMAGE                     COMMAND     CREATED              STATUS              PORTS      NAMES
+     1a174fc216cc      acme/my-final-image:1.0   "bash"      About a minute ago   Up About a minute              my_container_5
+     38fa94212a41      acme/my-final-image:1.0   "bash"      About a minute ago   Up About a minute              my_container_4
+     1e7264576d78      acme/my-final-image:1.0   "bash"      About a minute ago   Up About a minute              my_container_3
+     dcad7101795e      acme/my-final-image:1.0   "bash"      About a minute ago   Up About a minute              my_container_2
+     c36785c423ec      acme/my-final-image:1.0   "bash"      About a minute ago   Up About a minute              my_container_1
+     ```
+  
+  3. 列举本地存储区域的内容
+  
+     ```shell
+     $ sudo ls /var/lib/docker/containers
+     
+     1a174fc216cccf18ec7d4fe14e008e30130b11ede0f0f94a87982e310cf2e765
+     1e7264576d78a3134fbaf7829bc24b1d96017cf2bc046b7cd8b08b5775c33d0c
+     38fa94212a419a082e6a6b87a8e2ec4a44dd327d7069b85892a707e3fc818544
+     c36785c423ec7e0422b2af7364a7ba4da6146cbba7981a0951fcc3fa0430c409
+     dcad7101795e4206e637d9358a818e5c32e13b349e62b00bf05cd5a4343ea513
+     ```
+  
+  4. 检查容器的大小
+  
+     ```shell
+     $ sudo du -sh /var/lib/docker/containers/*
+     
+     32K  /var/lib/docker/containers/1a174fc216cccf18ec7d4fe14e008e30130b11ede0f0f94a87982e310cf2e765
+     32K  /var/lib/docker/containers/1e7264576d78a3134fbaf7829bc24b1d96017cf2bc046b7cd8b08b5775c33d0c
+     32K  /var/lib/docker/containers/38fa94212a419a082e6a6b87a8e2ec4a44dd327d7069b85892a707e3fc818544
+     32K  /var/lib/docker/containers/c36785c423ec7e0422b2af7364a7ba4da6146cbba7981a0951fcc3fa0430c409
+     32K  /var/lib/docker/containers/dcad7101795e4206e637d9358a818e5c32e13b349e62b00bf05cd5a4343ea513
+     ```
+  
+     cow策略不仅仅节省空间,也会降低启动时间,当你启动容器(来自同一个进行的多个容器)的时候,docker仅仅需要创建可写容器层即可.
+  
+     如果docker每次启动都需要对底层镜像进行完全的拷贝,容器的启动时间和磁盘占用了将会大量上升.这个与虚拟机类似,每个虚拟机有一个或者多个虚拟磁盘.
 
-4. 使用Btrfs存储驱动器
+2. 存储驱动器的选择
 
-5. 使用设备映射存储驱动器
+   ---
 
-6. 使用Overlay存储驱动器
+   #### **存储器使用教程**
 
-7. 使用ZFS存储驱动器
 
-8. 使用VFS存储驱动器
+1. 使用AUFS存储驱动器
+2. 使用Btrfs存储驱动器
+3. 使用设备映射存储驱动器
+4. 使用Overlay存储驱动器
+5. 使用ZFS存储驱动器
+6. 使用VFS存储驱动器
