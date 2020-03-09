@@ -986,9 +986,58 @@ $ sudo lsof /var/lib/docker/containers/74bef250361c7817bee19349c93139621b272bc8f
 
 2. 存储驱动器的选择
 
-   ---
+   理想状态下，非常少的数据会写到可写层，且使用docker数据卷去写数据。但是一些工作负载需要去写数据到容器可写层，这就引入了存储驱动器。
 
-   #### **存储器使用教程**
+   docker支持多种存储驱动器，使用可插拔的构建。存储驱动器控制镜像和容器的存储方式，并在docker主机上进行管理。
+   
+   在读完存储驱动器概述之后，下一步就是选择最优的存储驱动器，用于工作负载。做决定是，有三个因素需要考虑：
+   
+   如果内核支持多个存储驱动器，docker在没有驱动器显示的配置的时候，会有一个优先化的存储驱动器列表。
+   
+   按照最高性能和稳定性使用存储驱动器是通常的情景。
+   
+   docker支持下述驱动器：
+   
+   - `overlay2`是优选的存储驱动器,支持linux,不需要额外的配置
+   - `aufs`在18.06以及之前不得版本是最优驱动器.
+   - `devicemapper`允许支持,但是在生产环境下需要`direct-lvm`,由于`loopback-lvm`的原因,当没有配置的时候,性能非常差.`devicemapper`在CentOS和RHEL的环境下是推荐驱动器.因为其内核版本不支持`overlay2`.当时当前版本的CentOS和RHEL已经开始支持`overlay2`了,且是推荐的驱动器.
+   - `btrfs`和`zfs`存储驱动器在它们作为后备文件系统的时候使用.这些文件系统允许高级配置,比如说创建**快照**,但是需要更多的支持才能够进行.且需要每个后备系统配置正确.
+   - `vfs`存储驱动器适用于测试环境下,这种情况可以使用非coW策略的文件系统.存储驱动器的性能很差,不推荐生产环境下使用.
+   
+   docker源码中定义了选择策略,可以参考[docker引擎的源码](https://github.com/docker/docker-ce/blob/19.03/components/engine/daemon/graphdriver/driver_linux.go#L50),如果运行不同版本的docker,可以使用峰值管理切换到不同的版本下.
+   
+   一些存储驱动器需要使用指定后备文件系统的形式.如果需要使用指定的后备文件系统的需求,这个会限制你的操作.
+   
+   当你收缩选择的存储驱动器之后，可以根据工作负载的特这和你需要的稳定性去抉择。参考选择驱动器的[考虑原则](http://127.0.0.1:4000/storage/storagedriver/select-storage-driver/#other-considerations).
+   
+   > 注意: 你的选择也需要考虑docker版本,操作系统和发行版的情况.例如`aufs`支持Unbuntu和Debian,且需要安装其他包.而`brtfs`仅仅支持SLES,这个只有docker才能支持.
+
++ 每种linux发行版中存储驱动器的支持情况
+
+  在高等级情况下，存储驱动器可以使用docker版本的部分内容。
+
+  此外，docker不建议需要取消操作系统安全特征的配置、比如说在centOS上使用`overlay`或者`overlay2`的情况下取消`selinux`.
+
++ docker引擎 - docker企业开发版
+
+  docker引擎的企业开发版中，支持存储驱动器的是产品相容性矩阵。为了获取docker的商业支持，必须使用配置的属性
+
++ docker引擎 - 社区版
+
+  在社区版本中，一些配置是用于测试的，你的操作系统内核可能不支持所有的存储驱动器。总体而言，线束配置在最近版本的linux发行版中可以使用：
+
+  | linux发行版 | 推荐使用的存储驱动器                | 可替代的存储驱动器                             |
+  | ----------- | ----------------------------------- | ---------------------------------------------- |
+  | Ubuntu      | `overlay`或者`aufs`                 | `overlay`<br />`devicemapper`<br />`zfs`,`vfs` |
+  | Debain      | `overlay2`,`aufs`或者`devicemapper` | `overlay`,`vfs`                                |
+  | CentOS      | `overlay2`                          | `overlay`<br />`devicemapper`<br />`zfs`,`vfs` |
+  | Fedora      | `overlay2`                          | `overlay`,`devicemapper`<br />`zfs`或者`vfs`   |
+
+  
+
+---
+
+#### **存储器使用教程**
 
 
 1. 使用AUFS存储驱动器
