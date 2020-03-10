@@ -1033,7 +1033,74 @@ $ sudo lsof /var/lib/docker/containers/74bef250361c7817bee19349c93139621b272bc8f
   | CentOS      | `overlay2`                          | `overlay`<br />`devicemapper`<br />`zfs`,`vfs` |
   | Fedora      | `overlay2`                          | `overlay`,`devicemapper`<br />`zfs`或者`vfs`   |
 
+  可能的话,使用`overlay2`作为存储驱动器,当首次安装docker时,默认使用`overlay2`,之前的版本,使用`aufs`作为默认banbe,但是现在的情况不再是这样,如果需要使用`aufs`则需要进行配置,并安装额外的安装包.
   
+  使用`aufs`安装的应用仍然可以使用.
+  
+  当你疑惑的时候,最好的配置时使用现在的linux发行版内核支持的`overlay2`驱动器,使用docker数据卷去写出重负载.而不是将数据写入到容器可写层中.
+  
+  `vfs`通常不是最优选择,在使用`vfs`之前,需要确认这个驱动器的性能问题.
+  
+  注意： 在Mac或者Windows上修改存储驱动器是不可能的。
+  
++ 支持的后备文件系统
+
+  考虑到docker,后备文件系统位于`/var/lib/docker`中,一些存储驱动器仅仅在指定的后备文件系统才能工作.
+
+  | 存储驱动器           | 支持的后备文件系统             |
+  | -------------------- | ------------------------------ |
+  | `overlay2`,`overlay` | `xfs`(其中ftype=1)<br />`ext4` |
+  | `aufs`               | `xfs`,`ext4`                   |
+  | `devicemapper`       | `direct-lvm`                   |
+  | `btrfs`              | `btrfs`                        |
+  | `zfs`                | `zfs`                          |
+  | `vfs`                | 任何文件系统                   |
+
++ 其他考虑
+
+  1.  工作负载的适配
+
+     每个存储驱动器都有自己的性能特征,或多或少会与工作负载相关:
+
+     + `overlay2`,`overlay`和`aufs`操作文件而非数据块,这样可以更加高效的使用内存,但是在重载的情况下,可写层变得比较大.
+     + 数据块层级的驱动器`devicemapper`,`brtfs`和`zfs`在重载下性能良好,虽然不如使用数据卷效果好.
+     + 对于小写入,且多层的文件系统,`overlay`的效果比`overlay2`多,但是消耗更多的索引节点,这个会导致索引耗尽的问题.
+     + `brtfs`和`zfs`需要更多的内存
+     + `zfs`在高密度负载,比如说Paas的情况下是更好的选择
+
+     更多关于性能,适配,以及使用的信息参考各个驱动器的使用.
+
+  2. 共享存储系统和存储驱动器
+
+     如果使用SAN,NAS,硬盘RAID,或者其他的共享存储系统,这个可能提供高可用,高性能,副本和压缩的功能.在大多数情况下,docker可以工作在这些存储系统上,但是docker不会紧密的整合它们.
+
+     每个docker存储驱动器基于linux文件系统或者数据卷管理器,确定最受存在的最佳实践去操作存储驱动器.例如,使用ZFS存储驱动器在共享存储系统上,确保遵守ZFS的最佳实践/
+
+  3. 稳定性
+
+     对于一些用户来说,稳定性比性能更重要.进过docker考虑到所有的存储驱动器,一些行的应用仍旧在开发过程中.总体来说,`overlay2`,`aufs`,`overlay`和`devicemapper`是高稳定性的.
+
+  4. 测试工作负载
+
+     在运行不同的负载的时候,可以测试docker的稳定性.确保使用合适的硬件与负载生产条件相匹配,可以查看哪些存储驱动器提供最好的性能.
+
+  5. 检查当前存储驱动器
+
+     每个存储驱动器的详细信息包好了所有的启动信息.
+
+     可以使用`docker info`查看到`Storage Driver`行,查看当前的存储驱动器.
+
+     ```shell
+     $ docker info
+     
+     Containers: 0
+     Images: 0
+     Storage Driver: overlay2
+      Backing Filesystem: xfs
+     <output truncated>
+     ```
+
+     为了改变存储驱动器,可以查看指定新的存储驱动器教程.一些驱动器需要额外的配置,包括对docker主机物理磁盘和逻辑磁盘的配置.
 
 ---
 
@@ -1041,8 +1108,25 @@ $ sudo lsof /var/lib/docker/containers/74bef250361c7817bee19349c93139621b272bc8f
 
 
 1. 使用AUFS存储驱动器
+
+   [本地教程](http://127.0.0.1:4000/storage/storagedriver/aufs-driver/)
+
 2. 使用Btrfs存储驱动器
+
+   [本地教程](http://127.0.0.1:4000/storage/storagedriver/btrfs-driver/)
+
 3. 使用设备映射存储驱动器
+
+   [本地教程](http://127.0.0.1:4000/storage/storagedriver/device-mapper-driver/)
+
 4. 使用Overlay存储驱动器
+
+   [本地教程](http://127.0.0.1:4000/storage/storagedriver/overlayfs-driver/)
+
 5. 使用ZFS存储驱动器
+
+   [本地教程](http://127.0.0.1:4000/storage/storagedriver/zfs-driver/)
+
 6. 使用VFS存储驱动器
+
+   [本地教程](http://127.0.0.1:4000/storage/storagedriver/vfs-driver/)
