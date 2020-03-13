@@ -260,7 +260,139 @@
 
 + 删除未使用的对象
 
-  
+  docker采样保守的方法清除未使用的对象(通常情况下指的是垃圾回收的对象).例如说镜像,容器,数据卷和网络.这些对象除非让docker移除否则是不会移除的.这个会占用额外的磁盘空间.对于每种类型的对象,docker提供了移除`prune`指令.可以使用`docker system prune`清除多个类型的对象.这个话题讨论这个指令的使用.
+
+  1.  移除镜像
+
+     指令`docker image prune`可以清除未使用的镜像,默认状态下,`docker image prune`仅仅清理悬空的镜像.悬空镜像值得是没有标签,且没有被任何容器引用的镜像.
+
+     ```shell
+     $ docker image prune
+     
+     WARNING! This will remove all dangling images.
+     Are you sure you want to continue? [y/N] y
+     ```
+
+     使用`-a`标签移除所有当前存在容器没有使用的镜像
+
+     ```shell
+     $ docker image prune -a
+     
+     WARNING! This will remove all images without at least one container associated to them.
+     Are you sure you want to continue? [y/N] y
+     ```
+
+     默认情况下如果你需要继续,为了传输请求,使用`-f`或者`--force`标签.
+
+     可以使用`--filter`标签设置过滤表达式,用于限制移除的镜像,下述示例表达的是创建在24h以前的镜像.
+
+     ```shell
+     $ docker image prune -a --filter "until=24h"
+     ```
+
+     其他过滤表达式都是可行的,请参考相关的参考文档.
+
+     + [本地文档](http://127.0.0.1:4000/engine/reference/commandline/image_prune/)
+     + [远程文档]()
+
+  2. 移除容器
+
+     停止容器的时候,除非使用`--rm`标签,否则是不会自动移除容器的.为了能够查看包含停止的容器在内的容器,可以使用`docker ps -a`标签查看.可以发现有很多的容器存在,尤其是在开发环境下.停止的容器可写层仍然占有磁盘空间.可以使用`docker container prune`指令清除.
+
+     ```shell
+     $ docker container prune
+     
+     WARNING! This will remove all stopped containers.
+     Are you sure you want to continue? [y/N] y
+     ```
+
+     默认情况下,可以使用`-f`或者`--force`标签强制进行.
+
+     可以使用`--filter`设置过滤表达式,下述示例描述需要移除超过24h以前的容器.
+
+     ```shell
+     $ docker container prune --filter "until=24h"
+     ```
+
+     其他指令请参考相关文档
+
+     + [本地文档](http://127.0.0.1:4000/engine/reference/commandline/container_prune/)
+     + [远程文档]()
+
+  3. 移除数据卷
+
+     数据卷可以被容器使用,占据docker主机的空间.数据卷不可以被自动移除,因为这样做会销毁数据.
+
+     ```shell
+     $ docker volume prune
+     
+     WARNING! This will remove all volumes not used by at least one container.
+     Are you sure you want to continue? [y/N] y
+     ```
+
+     默认情况下,可以使用`-f`或者`--force`强行执行.
+
+     默认所有未使用的数据卷会被移除,可以使用`--filter`标签设置过滤表达式.下述标签移除了非`keep`标签的数据卷.
+
+     ```shell
+     $ docker volume prune --filter "label!=keep"
+     ```
+
+     其他指令可参考相关文档
+
+     + [本地文档](http://127.0.0.1:4000/engine/reference/commandline/volume_prune/)
+     + [远程文档]()
+
+  4. 移除网络
+
+     docker网络不会占用很多磁盘空间,但是会创建路由表,往前网络设备,可以使用`docker network prune`清除容器未使用的网络资源.
+
+     ```shell
+     $ docker network prune
+     
+     WARNING! This will remove all networks not used by at least one container.
+     Are you sure you want to continue? [y/N] y
+     ```
+
+     默认可以设置`-f`或者`--force`标签强行执行.可以使用`--filter`设置过滤表达式.下述示例描述的是移除超过24h以前的网络.
+
+     ```shell
+     $ docker network prune --filter "until=24h"
+     ```
+
+     相关配置参考
+
+     + [本地文档](http://127.0.0.1:4000/engine/reference/commandline/network_prune/)
+     + [远程文档]()
+
+  5. 移除所有
+
+     `docker system prune`是移除上述所有的简略表达,17.06.0版本以及之前移除所有.但是之后的版本,必须要指定`--volumes`标签才行.
+
+     ```shell
+     $ docker system prune
+     
+     WARNING! This will remove:
+             - all stopped containers
+             - all networks not used by at least one container
+             - all dangling images
+             - all build cache
+     Are you sure you want to continue? [y/N] y
+     ```
+
+     17.06.0之后的版本
+
+     ```shell
+     $ docker system prune --volumes
+     
+     WARNING! This will remove:
+             - all stopped containers
+             - all networks not used by at least one container
+             - all volumes not used by at least one container
+             - all dangling images
+             - all build cache
+     Are you sure you want to continue? [y/N] y
+     ```
 
 + 格式化命令行和日志输出
 
