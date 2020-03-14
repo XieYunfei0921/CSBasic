@@ -396,11 +396,315 @@
 
 + 格式化命令行和日志输出
 
+  可以操作指定输出格式的指令和日志驱动器用于获取模板。
+
+  docker提供一系列操作模板元素的函数。这些都使用`docker inspect`指令,但是许多客户端指令有`--format`标签,且客户端指令引用包含输出形式客户端的引用.
+
+  1. join
+
+     `join`连接字符串列表,用于创建单个字符串,在每个元素之间使用分隔符连接.
+
+     ```shell
+     $ docker inspect --format '{{join .Args " , "}}' container
+     ```
+
+  2. json
+
+     `json`使用json字符串编码元素
+
+     ```shell
+     $ docker inspect --format '{{json .Mounts}}' container
+     ```
+
+  3. lower
+
+     `lower`将一个字符串转换成小写形式
+
+     ```shell
+     $ docker inspect --format "{{lower .Name}}" container
+     ```
+
+  4. split
+
+     `split`按照分隔符将字符串进行分割
+
+     ```shell
+     $ docker inspect --format '{{split .Image ":"}}'
+     ```
+
+  5. title
+
+     `title`对首字符大写处理
+
+     ```shell
+     $ docker inspect --format "{{title .Name}}" container
+     ```
+
+  6. upper
+
+     `upper`将字符串转化为大写
+
+     ```shell
+     $ docker inspect --format "{{upper .Name}}" container
+     ```
+
+  7. println
+
+     `println`打印新行的每个value
+
+     ```shell
+     $ docker inspect --format='{{range .NetworkSettings.Networks}}{{println .IPAddress}}{{end}}' container
+     ```
+
+     为了查看什么数据打印了处理,可以使用json显示
+
+     ```shell
+     $ docker container ls --format='{{json .}}'
+     ```
+
 **配置启动器**
 
 ---
 
++ 配置并运行docker
 
+  成功启动docker之后,docker按照默认配置启动,这个话题讨论如何自定义配置,手动的操作启动器,并对启动的问题作出讨论.
+
+  1.  使用操作系统应用启动
+
+     On a typical installation the Docker daemon is started by a system utility, not manually by a user. This makes it easier to automatically start Docker when the machine reboots.
+
+     The command to start Docker depends on your operating system. Check the correct page under [Install Docker](http://127.0.0.1:4000/install/). To configure Docker to start automatically at system boot, see [Configure Docker to start on boot](http://127.0.0.1:4000/install/linux/linux-postinstall/#configure-docker-to-start-on-boot).
+
+     docker在典型安装情况下使用了系统应用.不是有用户手动操作的.这个使得重启的时候自动启动docker更简单.
+
+     这个指令依靠操作系统启动docker.检查安装时的错误页.系统如何的启动docker,请参考:
+
+     + [本地教程](http://127.0.0.1:4000/install/linux/linux-postinstall/#configure-docker-to-start-on-boot)
+     + [远程教程]()
+
+  2. 手动启动
+
+     如果不想使用系统应用管理docker启动器,或者仅仅只是测试一切东西.可以使用docker命令手动启动.可以使用`sudo`(依赖于操作系统配置).
+
+     当安装这个方法启动docker的时候,这个运行在前台,并直接将日志发送到前台.
+
+     ```shell
+     $ dockerd
+     
+     INFO[0000] +job init_networkdriver()
+     INFO[0000] +job serveapi(unix:///var/run/docker.sock)
+     INFO[0000] Listening for HTTP on unix (/var/run/docker.sock)
+     ```
+
+     如果需要停止,使用`Ctrl+C`指令.
+
+  3. 配置docker启动器
+
+     有两种方式配置docker启动器
+
+     + 使用json配置文件,这个是可选的配置,因为其将所有的配置保存在单个位置上
+     + 启动`dockerd`时使用标签
+
+     可以同时使用这两个标签,只要你没有将标签指向json文件即可.如果这么做了,那么docker不会启动.并会打印错误信息.
+
+     为了配置json文件,可以创建`/etc/docker/daemon.json`的linux文件,或者`C:\ProgramData\docker\config\daemon.json`的windows文件.
+
+     下面是文件的配置文件示例:
+
+     ```shell
+     {
+       "debug": true,
+       "tls": true,
+       "tlscert": "/var/docker/server.pem",
+       "tlskey": "/var/docker/serverkey.pem",
+       "hosts": ["tcp://192.168.59.3:2376"]
+     }
+     ```
+
+     当docker运行在debug模式下的时候,使用TLS监听端口`192.168.59.3:2376`.可以学习一下如何配置
+
+     + [本地教程](http://127.0.0.1:4000/engine/reference/commandline/dockerd/#daemon-configuration-file)
+     + [远程教程]()
+
+     可以手动启动docker启动器,并使用标签配置.这样有利于问题的定位.
+
+     下述是docker启动器的配置,使用同样的配置:(标签配置法)
+
+     ```shell
+     dockerd --debug \
+       --tls=true \
+       --tlscert=/var/docker/server.pem \
+       --tlskey=/var/docker/serverkey.pem \
+       --host tcp://192.168.59.3:2376
+     ```
+
+     可以学习如何配置参数,或者运行:
+
+     ```shell
+     $ dockerd --help
+     ```
+
+     指定的配置参数在docker文档中指定,可以参考下述文件:
+
+     本地文件:
+
+     1. [自动启动容器](http://127.0.0.1:4000/engine/admin/host_integration/)
+     2. [限制容器的资源](http://127.0.0.1:4000/engine/admin/resource_constraints/)
+     3. [配置存储驱动器](http://127.0.0.1:4000/engine/userguide/storagedriver/)
+     4. [容器安全](http://127.0.0.1:4000/engine/security/)
+
+  4. docker 启动目录
+
+     docker启动器将所有数据持久化到单个目录中，着了可以定位所有关于docker的内容，包括容器，镜像，数据卷，服务定义和密钥信息。
+
+     默认情况下目录是
+
+     + linux为`/var/lib/docker`
+     + windows下目录为`C:\ProgramData\docker`
+
+     可以使用不同的目录配置docker启动器。使用`data-root`配置属性.
+
+     由于docker主机的状态保存在这个目录上,确保每个启动器可以使用独有的目录.如果两个启动器共享一个目录,例如NFS文件系统共享,那么就会碰到难以解决的bug.
+
+  5. 启动器问题的定位
+
+     可以开启启动器上的debug功能,这样就可以了解运行时启动器的活动,有利于问题定位.如果驱动器完成时无响应的,可以对所有线程进行栈追踪,用于通过发送`SIGUSR`信号到启动器中,从而添加到启动器日志中.
+
+  6. 处理`daemon.json`和启动脚本之间的矛盾
+
+     使用`daemon.json`文件将配置传递到`dockerd`指令中或者使用启动脚本,这些配置时可能产生矛盾点,报错如下:
+
+     ```shell
+     If you use a daemon.json file and also pass options to the dockerd command manually or using start-up scripts, and these options conflict, Docker fails to start with an error such as:
+     ```
+
+     遇到上面的错误(或者类似的),表示你正在手动配置标签,需要调整标签或者移除`daemon.json`文件.
+
+     如果使用操作系统启动docker,可以重写这些脚本中的默认值.
+
+  7. 在`daemon.json`文件中使用系统配置的host
+
+     值得注意的配置矛盾示例是当你指定不同的启动地址的时候,很难去定位.docker使用socket去定位.在debian或者ubuntu系统中使用`systemd`.这个一位置主机标签`-H`总是在启动`dockerd`时候使用.如果你在`daemon.json`中使用`hosts`键值对,这就会导致启动失败.
+
+     为了解决这个问题,创建一个新文件`/etc/systemd/system/docker.service.d/`
+
+     `docker.conf`(使用下述配置)，去移除`-H`参数.用于启动默认的启动器.
+
+     ```shell
+     [Service]
+     ExecStart=
+     ExecStart=/usr/bin/dockerd
+     ```
+
+     当你使用``systemd`配置docker的时候,可以配置HTTP或者HTTPS代理
+
+     在请求启动docker之前,使用`sudo systemctl daemon-reload`指令,如果docker启动成功,`damon.json`中配置的`hosts`中指定监听的ip地址而非是使用socket.
+
+  8. OOM异常
+
+     如果容器请求超过系统可用的内存,将会引发OOM.如果你经历了OOM.且容器或者启动器可能被内核OOM中断.为了防止这个发生.确保应用运行的主机拥有足够的内存
+
+  9.  读取日志
+
+     启动器日志可能会帮助你诊断问题,日志会保存在溢写位置上,主要是依靠操作系统的配置.
+
+     | 操作系统               | 位置                                                         |
+     | ---------------------- | ------------------------------------------------------------ |
+     | RHEL,Oracle Linux      | `/var/log/messages`                                          |
+     | Debian                 | `/var/log/daemon.log`                                        |
+     | Unbuntu 16.04+ ,Centos | 使用指令`journalctl -u docker.service`                       |
+     | Ubuntu 14.10-          | `/var/log/upstart/docker.log`                                |
+     | macOS(Docker 18.01+)   | `~/Library/Containers/com.docker.docker/Data/vms/0/console-ring` |
+     | macOS(Docker 18.01-)   | `~/Library/Containers/com.docker.docker/Data/com.docker.driver.amd64-linux/console-ring` |
+     | Windows                | `AppData\Local`                                              |
+
+  10. 启动调试
+
+      有如下两种方式开启调试,推荐的方法是在`daemon.json`中设置`debug`为`true`.在每个docker平台上都可以使用。
+
+      1. 编辑`daemon.json`文件,通常位于`/etc/docker/`目录中,可能需要创建这个文件.在mac或者windows平台上,不能直接修改,跳转到**Preferences** / **Daemon** / **Advanced**设置。
+
+      2. 这个文件是空的，添加下述内容
+
+         ```shell
+         {
+           "debug": true
+         }
+         ```
+
+         如果文件包含json,仅仅添加`"debug":true`即可,注意json的格式.同时需要确认`log-level`是否设置,将其设置为`info`或者`debug`.默认状况下为`info`或者`debug`.可以选择的还有`warn`,`error`,和`fetal`.
+
+      3. 发送`HUP`信号到启动器,会导致配置的重载,在linux上使用如下指令:
+
+         ```shell
+         $ sudo kill -SIGHUP $(pidof dockerd)
+         ```
+
+         在windows上重启docker即可.
+
+         ​	可以停止docker启动器，并手动进行重启（使用debug标签`-D`）.范式这个可能导致docker使用不同环境变量重启,这样会使调试根据困难.
+
+  11. 打印栈追踪日志
+
+      如果启动器没有相应,可以发送`SIGUSR1`去获取栈追踪信息
+
+      + linux
+
+      ```shell
+      $ sudo kill -SIGUSR1 $(pidof dockerd)
+      ```
+
+      + windows
+        1. 下载[docker-signal]()
+        2. 获取dockerd的进程编号
+        3. 使用执行器标签`--pid=<PID of daemon>
+
+      这个会记录栈追踪信息,但是不会停止启动器,启动器日志会显示栈追踪信息,或者包含栈追踪的文件路径(如果记录到文件的情况下).
+
+      启动器在处理`SIGUSER1`信号之后会继续操作,且将栈追踪信息记录到日志中.栈追踪可以使用与决定所有启动器的线程和管理信息.
+
+  12. 检查docker是否在运行
+
+      操作系统检查docker是否允许的方法时询问docker,使用`docker info`指令。
+
+      可以使用操作系统应用，比如`sudo systemctl is-active docker`或者`sudo status docker`或者`sudo service docker status`检查windows应用的服务状态.
+
+      最后,可以检查docker进程的进程列表,使用`ps`或者`top`之类的指令.
+
++ 使用系统命令控制docker
+
+  许多linux发行版都使用系统命令启动docker启动器,这个文档会演示如何去配置.
+
+  1. 启动docker启动器
+
+     + 手动启动
+
+       一旦docker安装,需要启动docker启动器,大多数linux发行版使用`systemctl`启动服务.如果没有`systemctl`则使用`service`指令.
+
+       ```shell
+       # systemctl
+       $ sudo systemctl start docker
+       # service
+       $ sudo service docker start
+       ```
+
+     + 系统自动启动
+
+       参考下面的docker的开机启动
+
+       <http://127.0.0.1:4000/install/linux/linux-postinstall//#configure-docker-to-start-on-boot>
+
+     + 配置docker启动器属性
+
+       有许多配置启动器标签和环境变量的方式,推荐使用平台无关性较好的`daemon.json`配置方式.位于`/etc/docker`目录下.参考配置方法:
+
+       + [本地教程](http://127.0.0.1:4000/engine/reference/commandline/dockerd//#daemon-configuration-file)
+       + [远程教程]()
+
+       可以使用`daemon.json`配置启动配置下述示例使用了两个配置.不能使用`daemon.json`配置的是HTTP代理.
+
+     + 运行时目录和存储驱动器的配置
 
 **使用外部工具运行**
 
