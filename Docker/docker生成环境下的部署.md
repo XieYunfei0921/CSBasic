@@ -705,12 +705,141 @@
        可以使用`daemon.json`配置启动配置下述示例使用了两个配置.不能使用`daemon.json`配置的是HTTP代理.
 
      + 运行时目录和存储驱动器的配置
+     
+       设置下述`daemon.json`文件,用于控制docker镜像,容器,数据卷的操盘使用空间.通过将其移动到分开的分区中.
+     
+       ```shell
+       {
+           "data-root": "/mnt/docker-data",
+           "storage-driver": "overlay2"
+       }
+       ```
+     
+     + HTTP/HTTPS代理
+     
+       docker启动器使用`HTTP_PROXY`,`HTTPS_PROXY`,和`NO_PROXY`环境变量,用于配置HTTP/HTTPS的环境变量.不能使用`daemon.json`配置环境变量.
+     
+       下述示例覆盖了默认的`docker.service`文件.
+     
+       如果在HTTP/HTTPS的后台服务器上,可以添加这个配置到docker 系统服务文件中.
+     
+       1.  创建docker服务的drop-in目录
+     
+          ```shell
+          $ sudo mkdir -p /etc/systemd/system/docker.service.d
+          ```
+     
+       2. 创建`/etc/systemd/system/docker.service.d/http-proxy.conf`文件,并配置`HTTP_PROXY`属性
+     
+          ```shell
+          [Service]
+          Environment="HTTP_PROXY=http://proxy.example.com:80/"
+          ```
+     
+          如果在HTTPS代理服务器后面,创建`/etc/systemd/system/docker.service.d/https-proxy.conf`文件,添加`HTTP_PROXY`环境变量.
+     
+          ```shell
+          [Service]
+          Environment="HTTPS_PROXY=https://proxy.example.com:443/"
+          ```
+     
+       3. 如果有内部docker注册器,需要不使用代理进行连接,可以指定`NO_PROXY`环境变量.
+     
+          `NO_PROXY`环境变量指定一个包含逗号分隔符的字符串,这些参数处理主机名都可以指定.
+     
+          + ip地址(例如:`1.2.3.4`)
+          + 域名或者特殊的DNS标签(*)
+          + 域名和所有子域名,首字符`.`仅仅匹配子域名,例如`foo.example.com`或者`example.com`
+            + `example.com`匹配与`example.com`和`foo.example.com`
+            + `.example.com`仅仅会匹配`foo.example.com`
+          + 通配符(*)表名没有代理
+          + 接受主机:端口号和域名:端口号的配置
+     
+          配置示例
+     
+          ```shell
+          [Service]    
+          Environment="HTTP_PROXY=http://proxy.example.com:80/" "NO_PROXY=localhost,127.0.0.1,docker-registry.example.com,.corp"
+          ```
+     
+          在HTTP代理服务器上这样配置
+     
+          ```shell
+          [Service]    
+          Environment="HTTPS_PROXY=https://proxy.example.com:443/" "NO_PROXY=localhost,127.0.0.1,docker-registry.example.com,.corp"
+          ```
+     
+       4. 刷新变化
+     
+          ```shell
+          $ sudo systemctl daemon-reload
+          ```
+     
+       5. 重启docker
+     
+          ```shell
+          $ sudo systemctl restart docker
+          ```
+     
+       6. 验证载入的配置
+     
+          ```shell
+          $ systemctl show --property=Environment docker
+          Environment=HTTP_PROXY=http://proxy.example.com:80/
+          ```
+     
+          在HTTPS代理服务器的验证
+     
+          ```shell
+          $ systemctl show --property=Environment docker
+          Environment=HTTPS_PROXY=https://proxy.example.com:443/
+          ```
+     
+     + 配置docker监听连接
+     
+       + [本地教程](# http://127.0.0.1:4000/install/linux/linux-postinstall/#control-where-the-docker-daemon-listens-for-connections)
+       + [远程教程]()
 
 **使用外部工具运行**
 
 ---
 
++ 三方监视工具
 
+  可以使用三方工具监控docker
+
+  - [使用Prometheus收集docker的计量信息](http://127.0.0.1:4000/config/thirdparty/prometheus/)
+  - [docker发行版使用Sysdig 监控方案](https://success.docker.com/article/sysdig-monitoring)
+  - [docker发行版使用DataDog 监控方案](https://success.docker.com/article/datadog-monitoring)
+
++ 使用Prometheus收集计量信息
+
+  Prometheus 是开源系统监控器且拥有警告工具箱，可以以Prometheus配置docker，这里讨论如何去配置docker，创建Prometheus，使用docker容器运行。使用Prometheus监视docker实例。
+
+  1. 配置docker
+
+     配置docker作为Prometheus值，需要指定`metrics-address`,最好的方式时配置`daemon.json`,这个位于如下位置:
+
+     + linux: `/etc/docker/daemon.json`
+
+     + windows:`C:\ProgramData\docker\config\daemon.json`
+
+     + docker桌面版:
+
+       点击选择**Preferences**>**Daemon**>**Advanced**
+
+     设置配置
+
+     ```shell
+     {
+       "metrics-addr" : "127.0.0.1:9323",
+       "experimental" : true
+     }
+     ```
+
+  2. 配置和运行Prometheus
+
+  3. 使用Prometheus
 
 **配置容器**
 
