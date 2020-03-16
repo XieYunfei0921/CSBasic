@@ -839,9 +839,347 @@
 
   2. 配置和运行Prometheus
 
+     Prometheus以docker服务的形式运行在docker swarm上。
+  
+     下述配置文件的内容到`/tmp/prometheus.yml`上,或者windows目录`C:\tmp\prometheus.yml`上，这个Prometheus的配置排除了底层docker文件的添加。docker桌面版的配置稍有不同。
+  
+     ```shell
+     # linux版本配置
+     # my global config
+     global:
+       scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+       evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+       # scrape_timeout is set to the global default (10s).
+     
+       # Attach these labels to any time series or alerts when communicating with
+       # external systems (federation, remote storage, Alertmanager).
+       external_labels:
+           monitor: 'codelab-monitor'
+     
+     # Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+     rule_files:
+       # - "first.rules"
+       # - "second.rules"
+     
+     # A scrape configuration containing exactly one endpoint to scrape:
+     # Here it's Prometheus itself.
+     scrape_configs:
+       # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+       - job_name: 'prometheus'
+     
+         # metrics_path defaults to '/metrics'
+         # scheme defaults to 'http'.
+     
+         static_configs:
+           - targets: ['localhost:9090']
+     
+       - job_name: 'docker'
+              # metrics_path defaults to '/metrics'
+              # scheme defaults to 'http'.
+     
+         static_configs:
+           - targets: ['localhost:9323']
+     ```
+  
+     ```shell
+     # mac桌面版本配置
+     # my global config
+     global:
+       scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+       evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+       # scrape_timeout is set to the global default (10s).
+     
+       # Attach these labels to any time series or alerts when communicating with
+       # external systems (federation, remote storage, Alertmanager).
+       external_labels:
+           monitor: 'codelab-monitor'
+     
+     # Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+     rule_files:
+       # - "first.rules"
+       # - "second.rules"
+     
+     # A scrape configuration containing exactly one endpoint to scrape:
+     # Here it's Prometheus itself.
+     scrape_configs:
+       # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+       - job_name: 'prometheus'
+     
+         # metrics_path defaults to '/metrics'
+         # scheme defaults to 'http'.
+     
+         static_configs:
+           - targets: ['docker.for.mac.localhost:9090']
+     
+       - job_name: 'docker'
+              # metrics_path defaults to '/metrics'
+              # scheme defaults to 'http'.
+     
+         static_configs:
+           - targets: ['docker.for.mac.host.internal:9323']
+     ```
+  
+     ```shell
+     # windows桌面版本
+     # my global config
+     global:
+       scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+       evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+       # scrape_timeout is set to the global default (10s).
+     
+       # Attach these labels to any time series or alerts when communicating with
+       # external systems (federation, remote storage, Alertmanager).
+       external_labels:
+           monitor: 'codelab-monitor'
+     
+     # Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+     rule_files:
+       # - "first.rules"
+       # - "second.rules"
+     
+     # A scrape configuration containing exactly one endpoint to scrape:
+     # Here it's Prometheus itself.
+     scrape_configs:
+       # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+       - job_name: 'prometheus'
+     
+         # metrics_path defaults to '/metrics'
+         # scheme defaults to 'http'.
+     
+         static_configs:
+           - targets: ['docker.for.win.localhost:9090']
+     
+       - job_name: 'docker'
+              # metrics_path defaults to '/metrics'
+              # scheme defaults to 'http'.
+     
+         static_configs:
+           - targets: ['192.168.65.1:9323']
+     ```
+  
+     下一步使用配置文件启动Prometheus服务.
+  
+     ```shell
+     # linux
+     $ docker service create --replicas 1 --name my-prometheus \
+         --mount type=bind,source=/tmp/prometheus.yml,destination=/etc/prometheus/prometheus.yml \
+         --publish published=9090,target=9090,protocol=tcp \
+         prom/prometheus
+     ```
+  
+     ```shell
+     # mac桌面版本
+     $ docker service create --replicas 1 --name my-prometheus \
+         --mount type=bind,source=/tmp/prometheus.yml,destination=/etc/prometheus/prometheus.yml \
+         --publish published=9090,target=9090,protocol=tcp \
+         prom/prometheus
+     ```
+  
+     ```shell
+     # windows桌面版
+     PS C:\> docker service create --replicas 1 --name my-prometheus
+         --mount type=bind,source=C:/tmp/prometheus.yml,destination=/etc/prometheus/prometheus.yml
+         --publish published=9090,target=9090,protocol=tcp
+         prom/prometheus
+     ```
+  
   3. 使用Prometheus
+  
+     创建一个图,点击PrometheusUI中的`Graphs`.选择度量,右键执行.
+  
+     上述图显示了空载docker实例,这里的图可能和在运行中激活的负载有一些不同.
+  
+     为了使图更加生动,通过启动任务,这些任务仅仅ping Docker,创建一些网络动作.
 
 **配置容器**
 
 ---
 
+1.  自动启动容器
+
+   docker提供重启策略,用于控制容器退出时自动启动.重启策略保证了连接容器按正确的顺序进行重启.docker建议使用重启策略,并没使用进程管理器启动容器.
+
+   重启策略不用于`--live-restore`标签和`docker`指令.使用`--live-restore`可以是容器在docker升级的时候保持运行.尽管这个时候网络和用户输入都停止了.
+
+   + 使用重启策略
+
+     在使用`docker run`指令的同时,使用`--restart`标签配置容器的重启策略,重启标签可以参照如下设置.
+
+     | 标签名称      | 描述                                                         |
+     | ------------- | ------------------------------------------------------------ |
+     | `no`          | 不会自动重启容器(默认)                                       |
+     | `no-failure`  | 如果因为失败退出,则重启容器.这个会发生在退出码不是0的时候.   |
+     | `always`      | 停止的时候总是重启容器,如果手动停止,只会在docker启动器重启或者容器自身重启的时候重启. |
+     | `unless-stop` | 类似`always`除非容器停止,否则docker启动器重启之后就会重启    |
+
+     下述示例启动了Redis容器,且配置总是重启,除非容器停止或者docker重启.
+
+     ```shell
+     $ docker run -dit --restart unless-stopped redis
+     ```
+
+   + 重启策略细节
+
+     重启策略有下述特征
+
+     - 重启策略只对成功启动的容器有效,这种情况下,成功启动意味着容器至少启动了10s,且docker启动了监听.阻止没有启动的容器的重启.
+     - 如果手动的停止容器,重启策略就会被忽视,直到docker启动器重启或者容器手动重启才能生效.这个用于组织形成重启环的形成.
+     - 重启策略仅仅应用在容器中,swarm服务的重启策略配置方式不同.详情参考[相关文档](http://127.0.0.1:4000/engine/reference/commandline/service_create/)
+
+   + 使用进程管理器
+
+     如果重启策略不满足你的需求,比如在docker之外需要依赖docker容器.可以使用进程管理[`upstart`](http://upstart.ubuntu.com/),[`systemd`](http://freedesktop.org/wiki/Software/systemd/)或者[`supervisor`](http://supervisord.org/)。
+
+     > 注意: 不要将重启策略和host级别的进程管理器配置在一起,因为会引起冲突
+
+     为了能够使用进程管理器,配置进程管理器,使用`docker start`或者`docker service`用于启动容器或者服务.可以参考进程管理器的文档寻找更多的细节.
+
+   + 在容器内部使用进程管理器
+
+     无论进程处于运行状态,启动或者重启的状态,进程管理器都可以在容器内部运行.
+
+2. 保持容器在启动器宕机的时候仍旧运行
+
+   默认情况下,docker启动器停止的时候,会关闭运行的容器.在docker引擎1.12之后,可以配置启动器,这样容器就可以在启动器不可用的时候保持运行.这个功能就做**存活恢复**.存活恢复可以减少容器由于启动器故障导致的宕机时间.
+
+   + 开启存活恢复
+
+     有两种方式开启存活恢复,只需要做其中一种就可以了
+
+     + 添加配置文件到启动配置文件中,linux上,默认在`/etc/docker/daemon.json`中.在docker桌面版中选择**Preferences** -> **Daemon** -> **Advanced**配置
+
+       + 使用json开启`live-store`
+
+         ```shell
+         {
+           "live-restore": true
+         }
+         ```
+
+       + 重启docker启动器,linux上可以通过重载启动器避免重启.如果使用`systemd`,使用`systemctl reload docker`.否则需要发送`SIGHUP`消息给`dockerd`进程.
+
+   + 升级开启存活恢复
+
+     存活恢复支持容器在启动器升级的时候保持运行.尽管这里有版本限制且不支持低版本的更新.如果在升级期间放弃发布,启动器不会恢复容器的链接.如果不能恢复链接,就不能管理运行中的容器,所以就必须要手动的进行管理.
+
+   + 重启的存活恢复
+
+     存活恢复仅仅在恢复容器的情况下工作,比如说网桥IP地址和图式驱动器没有改变的情况下才能进行恢复.如果启动器级别配置发生改变的时候,存活恢复就不能工作流,必须要手动的关闭容器.
+
+   + 运行容器存活恢复的影响
+
+     如果启动器长期宕机,运行容器可能填满FIFO日志(启动器需要读取的日志).日志满了之后就会阻塞容器进行日志的记录.默认缓冲大小为64K,必须要重启docker用于刷新.
+
+     linux上可以修改内核缓冲区,通过改变`/proc/sys/fs/pipe-max-size`.不能修改桌面版本的缓冲区大小.
+
+   + 存活恢复和swarm模式的关系
+
+     存活恢复只能工作在独立容器中,不能使用在swarm服务中.
+
+3. 容器中运行多个服务
+
+   容器的主要运行进程在`ENTRYPOINT`或者`CMD`中,位于dockerfile的末尾.建议每个容器使用一个服务,并将其分开.服务可以fork到多个进程中,但是为了获取docker的优势,避免一个容器处理多方面的应用.可以使用用户定义的网络和数据卷连接多个容器.
+
+   容器的主进程需要管理器所有启动的进程,一些情况下,主进程没有设计很好的时候,且没有处理好子进程关闭文档的时候.可以在运行容器的时候使用`--init`标签,这个标签添加一个小起始进程,且在容器退出的时候处理所有进程的释放.处理进程的方式优先于使用完全初始化进程(`sysvinit`,`upstart`,或者`systemd`)用于处理容器的进程生命周期.
+
+   如果需要在一个容器中运行超过一个服务,必须按照下述集中方式完成:
+
+   1.  将所有指令放置在一个包装脚本中,使用测试或者debug信息进行完成.类似`CMD`指令的运行包装脚本.首先给支包装脚本.
+
+      ```shell
+      #!/bin/bash
+      
+      # Start the first process
+      ./my_first_process -D
+      status=$?
+      if [ $status -ne 0 ]; then
+        echo "Failed to start my_first_process: $status"
+        exit $status
+      fi
+      
+      # Start the second process
+      ./my_second_process -D
+      status=$?
+      if [ $status -ne 0 ]; then
+        echo "Failed to start my_second_process: $status"
+        exit $status
+      fi
+      
+      # Naive check runs checks once a minute to see if either of the processes exited.
+      # This illustrates part of the heavy lifting you need to do if you want to run
+      # more than one service in a container. The container exits with an error
+      # if it detects that either of the processes has exited.
+      # Otherwise it loops forever, waking up every 60 seconds
+      
+      while sleep 60; do
+        ps aux |grep my_first_process |grep -q -v grep
+        PROCESS_1_STATUS=$?
+        ps aux |grep my_second_process |grep -q -v grep
+        PROCESS_2_STATUS=$?
+        # If the greps above find anything, they exit with 0 status
+        # If they are not both 0, then something is wrong
+        if [ $PROCESS_1_STATUS -ne 0 -o $PROCESS_2_STATUS -ne 0 ]; then
+          echo "One of the processes has already exited."
+          exit 1
+        fi
+      done
+      ```
+
+      下一步设置dockerfile
+
+      ```dockerfile
+      FROM ubuntu:latest
+      COPY my_first_process my_first_process
+      COPY my_second_process my_second_process
+      COPY my_wrapper_script.sh my_wrapper_script.sh
+      CMD ./my_wrapper_script.sh
+      ```
+
+   2. 如果有一个需要首先启动的主进程,且保持运行但是需要短暂地需要运行其他进程(可能是需要与主进程进行通信).可以使用bash进行控制
+
+      ```shell
+      #!/bin/bash
+      
+      # turn on bash's job control
+      set -m
+      
+      # Start the primary process and put it in the background
+      ./my_main_process &
+      
+      # Start the helper process
+      ./my_helper_process
+      
+      # the my_helper_process might need to know how to wait on the
+      # primary process to start before it does its work and returns
+      
+      
+      # now we bring the primary process back into the foreground
+      # and leave it there
+      fg %1
+      ```
+
+      设置dockerfile
+
+      ```dockerfile
+      FROM ubuntu:latest
+      COPY my_main_process my_main_process
+      COPY my_helper_process my_helper_process
+      COPY my_wrapper_script.sh my_wrapper_script.sh
+      CMD ./my_wrapper_script.sh
+      ```
+
+   3. 使用进程管理器`supervisord`,因为需要打包`supervisord`.镜像中的配置,和其管理的不同应用.所以这个管理器是重量级别的.下述是一个使用`supervisord`管理器进程的示例.假定预先写了`supervisord.conf`,`my_first_process`和`my_second_process`文件,都位于同一个目录中.
+
+      ```dockerfile
+      FROM ubuntu:latest
+      RUN apt-get update && apt-get install -y supervisor
+      RUN mkdir -p /var/log/supervisor
+      COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+      COPY my_first_process my_first_process
+      COPY my_second_process my_second_process
+      CMD ["/usr/bin/supervisord"]
+      ```
+
+4. 容器运行时计量值
+
+   
