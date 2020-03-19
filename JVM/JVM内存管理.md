@@ -291,6 +291,218 @@ if (!constants->tag_at(index).is_unresolved_klass()) {
 
 #### OOM异常
 
+使用IDE进行调试运行的时候，记得配置JVM参数。
+
+`-verbose:gc -Xms20M -Xmx20M -Xmn10M -XX:+PrintDetails -XX:SurvivorRatio=8`
+
 ##### java堆溢出
 
 java堆用于存储对象实例,只要不断的创建对象,保证GC Root到对象之间存在有可到达路径,从而避免被垃圾回收,随着对象数量增加,超出堆最大容量之后,就会产生内存溢出.
+
+下述的代码中设置java堆的大小为20MB,不可以扩展(设置最小值-Xms和最大值-Xmx一致是为了避免自动扩展).通过参数`-XX: +HeapDumpOnOutOfMemoryError`可以让虚拟机出现内存溢出的时候Dump出当前内存堆转储快照,以便进行事后分析.
+
+```java
+/**
+* VM Args： -Xms20m -Xmx20m -XX:+HeapDumpOnOutOfMemoryError
+* @author zzm
+*/
+public class HeapOOM {
+    static class OOMObject {
+    }
+    
+    public static void main(String[] args) {
+        List<OOMObject> list = new ArrayList<OOMObject>();
+        while (true) {
+        	list.add(new OOMObject());
+        }
+    }
+}
+```
+
+上述程序会导致内存溢出
+
+```shell
+java.lang.OutOfMemoryError: Java heap space
+Dumping heap to java_pid3404.hprof ...
+Heap dump file created [22045981 bytes in 0.663 secs]
+```
+
+java堆内存异常时实际应用中常见的内存溢出异常.出现异常信息的同时会进一步的显示`java heap space`.
+
+处理这类内存溢出的方法时,通过**内存映像分析工具**(Ecilpse Memory Analyzer)对Dump出来的堆转储进行快照分析.
+
+第一步,确定导致OOM的对象是否必要,即需要确定到底是**内存泄漏**(分配的内存没有回收)还是**内存溢出**(运行内存量不足).
+
+如果是内存泄漏,可以通过工具查看泄漏对象到GC Roots的引用链,找到对象通过何种路径找到GC Root,根据泄漏对象的类型信息以及GC Root引用链找到什么地方产生了内存泄漏.
+
+如果不是内存泄漏,就需要检查java虚拟机的堆参数设置,与机器内存的对比,看看是否可以向上调整.从代码上检查是否有一些代码生命周期过程,持有状态时间过程,存储结构设计不合理情况.减少程序运行时内存消耗的情况.
+
+##### 虚拟机栈和本地方法栈溢出
+
+HotSpot中不区分虚拟机栈和本地方法栈,因此设置`-Xoss`(本地方法栈)的参数虽然可以设置但是并没有什么效果,只能设置`-Xss`确定栈同类.关于栈异常,java虚拟机规范中提供两种类型:
+
+1. 线程请求的栈深度待遇虚拟机允许的最大深度,抛出StackOverflowError异常
+2. 如果虚拟机的栈内存允许动态扩展， 当扩展栈容量无法申请到足够的内存时， 将抛出
+   OutOfMemoryError异常 .
+
+java虚拟机规范中允许java虚拟机选择是否支持栈的动态扩展,而HotSpot虚拟机选择了不支持扩展,除非申请内存的时候无法获得足够的内存,从而出现OOM,才会扩展栈内存.
+
+可以进行如下实验,尝试下述两种内容是否可以产生OOM异常.
+
+- 使用`-Xss`参数减少栈内存容量
+
+  结果: 抛出StackOverflowError异常,异常出现的时候输出栈深度
+
+- 定义大量的本地变量,增大方法帧中本地变量表的长度
+
+  结果: 抛出StackOverflowError异常,异常出现的时候输出栈深度
+
++ 减少栈内存的测试代码如下
+
+```java
+/**
+* VM Args： -Xss128k
+*/
+public class JavaVMStackSOF {
+	private int stackLength = 1;
+    public void stackLeak() { // 每次执行栈深度+1
+        stackLength++;// 用于表示栈深度度量参数
+        stackLeak();
+    } 
+    public static void main(String[] args) throws Throwable {
+		JavaVMStackSOF oom = new JavaVMStackSOF();
+        try {
+        	oom.stackLeak();
+        } catch (Throwable e) {
+            // SOF时显示栈深度
+            System.out.println("stack length:" + oom.stackLength);
+            throw e;
+        }
+	}
+}
+```
+
+运行结果形式如下:
+
+```shell
+stack length:2402
+Exception in thread "main" java.lang.StackOverflowError
+    at org.fenixsoft.oom. JavaVMStackSOF.leak(JavaVMStackSOF.java:20)
+    at org.fenixsoft.oom. JavaVMStackSOF.leak(JavaVMStackSOF.java:21)
+    at org.fenixsoft.oom. JavaVMStackSOF.leak(JavaVMStackSOF.java:21)
+```
+
+对于不同版本的虚拟机和操作系统,栈容量最小值可能会有所限制,主要取决于操作系统内存分页的大小.
+
+譬如上述方法中的参数-Xss128k可以正常用于32位Windows系统下的JDK 6， 但是如果用于64位Windows系统下的JDK 11， 则会提示栈容量最小不能低于180K， 而在Linux下这个值则可能是228K .如果低于这个值则可能抛出异常信息.
+
+- 定义大量本地变量的测试代码
+
+  ```java
+  public class JavaVMStackSOF {
+  private static int stackLength = 0;
+  public static void test() {
+      long unused1, unused2, unused3, unused4, unused5,
+      unused6, unused7, unused8, unused9, unused10,
+      unused11, unused12, unused13, unused14, unused15,
+      unused16, unused17, unused18, unused19, unused20,
+      unused21, unused22, unused23, unused24, unused25,
+      unused26, unused27, unused28, unused29, unused30,
+      unused31, unused32, unused33, unused34, unused35,
+      unused36, unused37, unused38, unused39, unused40,
+      unused41, unused42, unused43, unused44, unused45,
+      unused46, unused47, unused48, unused49, unused50,
+      unused51, unused52, unused53, unused54, unused55,
+      unused56, unused57, unused58, unused59, unused60,
+      unused61, unused62, unused63, unused64, unused65,
+      unused66, unused67, unused68, unused69, unused70,
+      unused71, unused72, unused73, unused74, unused75,
+      unused76, unused77, unused78, unused79, unused80,
+      unused81, unused82, unused83, unused84, unused85,
+      unused86, unused87, unused88, unused89, unused90,
+      unused91, unused92, unused93, unused94, unused95,
+      unused96, unused97, unused98, unused99, unused100;
+      stackLength ++;
+      test();
+      unused1 = unused2 = unused3 = unused4 = unused5 =
+      unused6 = unused7 = unused8 = unused9 = unused10 =
+      unused11 = unused12 = unused13 = unused14 = unused15 =
+      unused16 = unused17 = unused18 = unused19 = unused20 =
+      unused21 = unused22 = unused23 = unused24 = unused25=
+      unused26 = unused27 = unused28 = unused29 = unused30 =
+      unused31 = unused32 = unused33 = unused34 = unused35 =
+      unused36 = unused37 = unused38 = unused39 = unused40 =
+      unused41 = unused42 = unused43 = unused44 = unused45 =
+      unused46 = unused47 = unused48 = unused49 = unused50 =
+      unused51 = unused52 = unused53 = unused54 = unused55 =
+      unused56 = unused57 = unused58 = unused59 = unused60 =
+      unused61 = unused62 = unused63 = unused64 = unused65 =
+      unused66 = unused67 = unused68 = unused69 = unused70 =
+      unused71 = unused72 = unused73 = unused74 = unused75 =
+      unused76 = unused77 = unused78 = unused79 = unused80 =
+      unused81 = unused82 = unused83 = unused84 = unused85 =
+      unused86 = unused87 = unused88 = unused89 = unused90 =
+      unused91 = unused92 = unused93 = unused94 = unused95 =
+  	unused96 = unused97 = unused98 = unused99 = unused100 = 0;
+  }
+      
+      public static void main(String[] args) {
+          try {
+          	test();
+          }catch (Error e){
+              System.out.println("stack length:" + stackLength);
+              throw e;
+          }
+      }
+  }
+  ```
+
+  结果表明，物理是栈内存太小或者是定义的变量过于多的时候，抛出的都是SOF。
+
+##### 方法区和运行时常量池的溢出
+
+> 示例:
+>
+> String::intern是一个本地的方法,作用是如果字符串常量池中包含一个等于这个String对象的字符串,则范湖代表池中这个字符串的引用;否则会将次String对象的字符串添加到常量池中,并且返回这个字符串得String的应用.
+>
+> ```java
+> /**
+> * VM Args： -XX:PermSize=6M -XX:MaxPermSize=6M
+> */
+> public class RuntimeConstantPoolOOM {
+>     public static void main(String[] args) {
+>         // 使用Set保持着常量池引用， 避免Full GC回收常量池行为
+>         Set<String> set = new HashSet<String>();
+>         // 在short范围内足以让6MB的PermSize产生OOM了
+>         short i = 0;
+>         while (true) {
+>         	set.add(String.valueOf(i++).intern());
+>         }
+>     }
+> }
+> ```
+>
+> 运行结果就会显示OOM,并指示内存溢出空间为`PermGen space`.在JDK 7之后这里显示的信息会不同.
+
+##### 本机直接内存溢出
+
+直接内存容量大小,可以通过`-XX: MaxDirectMemorySize`参数指定,如果不指定,默认与java堆的最大值`-Xmx`一致,下面的示例中越过了@DirectByteBuffer类直接通过反射获取Unsafe实例,并进行内存分配.虽然@DirectByteBuffer也会抛出内存溢出的异常,但是抛出异常的时候没有真正的想操作系统申请分配内存,而是用过计算的是内存无法分配,就会在代码中手动抛出异常,真实是使用Unsafe::allocateMemory()进行内存的分配.
+
+```java
+/**
+* VM Args： -Xmx20M -XX:MaxDirectMemorySize=10M
+*/
+public class DirectMemoryOOM {
+    private static final int _1MB = 1024 * 1024;
+        public static void main(String[] args) throws Exception {
+            Field unsafeField = Unsafe.class.getDeclaredFields()[0];
+            unsafeField.setAccessible(true);
+            Unsafe unsafe = (Unsafe) unsafeField.get(null);
+            while (true) {
+                unsafe.allocateMemory(_1MB);
+            }
+    }
+}
+```
+
+可以得到运行结果抛出内存溢出异常，如果程序中有使用直接内存(典型的就是NIO).那就可以考虑检查直接内存方面的内容.
