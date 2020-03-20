@@ -486,7 +486,7 @@ Exception in thread "main" java.lang.StackOverflowError
 
 ##### 本机直接内存溢出
 
-直接内存容量大小,可以通过`-XX: MaxDirectMemorySize`参数指定,如果不指定,默认与java堆的最大值`-Xmx`一致,下面的示例中越过了@DirectByteBuffer类直接通过反射获取Unsafe实例,并进行内存分配.虽然@DirectByteBuffer也会抛出内存溢出的异常,但是抛出异常的时候没有真正的想操作系统申请分配内存,而是用过计算的是内存无法分配,就会在代码中手动抛出异常,真实是使用Unsafe::allocateMemory()进行内存的分配.
+直接内存容量大小,可以通过`-XX: MaxDirectMemorySize`参数指定,如果不指定,默认与java堆的最大值`-Xmx`一致,下面的示例中越过了@DirectByteBuffer类直接通过反射获取Unsafe实例,并进行内存分配.虽然@DirectByteBuffer也会抛出内存溢出的异常,但是抛出异常的时候没有真正的像操作系统申请分配内存,而是用过计算的是内存无法分配,就会在代码中手动抛出异常,真实是使用Unsafe::allocateMemory()进行内存的分配.
 
 ```java
 /**
