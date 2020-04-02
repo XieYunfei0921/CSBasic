@@ -25,11 +25,6 @@ peerType=observer
 server.1:localhost:2181:3181:observer
 ```
 
-This tells every other server that server.1 is an Observer, and that they
-should not expect it to vote. This is all the configuration you need to do
-to add an Observer to your ZooKeeper cluster. Now you can connect to it as
-though it were an ordinary Follower. Try it out, by running:
-
 这个告知了其他服务器`server.1`这个是一个观察者,且不应当参加投票.这个是你在zookeeper集群的操作.
 
 现在可以连接到服务器.
@@ -44,49 +39,27 @@ $ bin/zkCli.sh -server localhost:2181
 
 观察者函数仅仅是一个不会参与投票的成员,和follower共享`Learner `接口.且仅仅是不同的内部pipeline.但都是保持了Leader的`quorum`端口的连接,这个会模仿到所有的目标.
 
-By default, Observers connect to the Leader of the quorum along its
-quorum port and this is how they learn of all new proposals on the
-ensemble. There are benefits to allowing Observers to connect to the
-Followers instead as a means of plugging into the commit stream in place
-of connecting to the Leader. It shifts the burden of supporting Observers
-off the Leader and allow it to focus on coordinating the commit of writes.
-This means better performance when the Leader is under high load,
-particularly high network load such as can happen after a leader election
-when many Learners need to sync. It reduces the total network connections
-maintained on the Leader when there are a high number of observers.
-Activating Followers to support Observers allow the overall number of
-Observers to scale into the hundreds. On the other end, Observer
-availability is improved since it will take shorter time for a high
-number of Observers to finish syncing and start serving client traffic.
+默认情况下,观察者连接到leader上,通过quorum(法定人数,这里理解为投票使用的端口)端口.这就是他们模仿leader的主要方式.允许观察者连接到Follower是有好处的.它会从leader中移除一些观察者的负担,并且关注与写的提交.
 
-This feature can be activated by letting all members of the ensemble know
-which port will be used by the Followers to listen for Observer
-connections. The following entry, when added to the server config file,
-will instruct Observers to connect to peers (Leaders and Followers) on
-port 2191 and instruct Followers to create an ObserverMaster thread to
-listen and serve on that port.
+这意味着在leader处于高负载的情况下(尤其是在高网络负载,比如说leader选举之后,learn需要同步的时候),会提升性能.在大量观察者存在的情况下向,降低了leader网络的链接的保持量.
 
-    observerMasterPort=2191
-<a name="ch_UseCases"></a>
+另一方面,观察者花费更短的时间完成同步,并且启动服务客户端.
 
-## Example use cases
+这个特征可以让所有成员知道哪个端口会被follower使用,用于监听观察者的连接.下述配置,会添加到服务器的配置文件中,指导观察者连接端口2191,用于followers去创建观察者线程,用于监听这个端口.
 
-Two example use cases for Observers are listed below. In fact, wherever
-you wish to scale the number of clients of your ZooKeeper ensemble, or
-where you wish to insulate the critical part of an ensemble from the load
-of dealing with client requests, Observers are a good architectural
-choice.
+```shell
+observerMasterPort=2191
+```
+**简单使用**
 
-* As a datacenter bridge: Forming a ZK ensemble between two
-  datacenters is a problematic endeavour as the high variance in latency
-  between the datacenters could lead to false positive failure detection
-  and partitioning. However if the ensemble runs entirely in one
-  datacenter, and the second datacenter runs only Observers, partitions
-  aren't problematic as the ensemble remains connected. Clients of the
-  Observers may still see and issue proposals.
-* As a link to a message bus: Some companies have expressed an
-  interest in using ZK as a component of a persistent reliable message
-  bus. Observers would give a natural integration point for this work: a
-  plug-in mechanism could be used to attach the stream of proposals an
-  Observer sees to a publish-subscribe system, again without loading the
-  core ensemble.
+下面的两个例子使用观察者监听,事实上,无论你是否需要**扩展zk客户端**,或者希望**隔离一些客户端请求的负载**,观察者都是好的选择.
+
++ **作为数据中心的桥梁**
+
+  在两个数据中心之间构建zk是一个不确定的尝试,为在数据中心之间的潜伏的变量可能引发错误的失败检测和分区.
+
+  但是如果在一个数据中心中运行,第二个数据中心作为观察者,分区就不会称为问题.
+
++ **作为消息总线的连接**:
+
+  一些公司使用zk开发了持久化的消息总线.观察者可以到这个工作的自然的整合.使用插件原理连接指定的观察者锁监控的流。
