@@ -57,26 +57,19 @@ synchronized public void process(WatchedEvent event) {
 
 #### 内存屏障
 
-A barrier is a primitive that enables a group of processes to synchronize the
-beginning and the end of a computation. The general idea of this implementation
-is to have a barrier node that serves the purpose of being a parent for individual
-process nodes. Suppose that we call the barrier node "/b1". Each process "p" then
-creates a node "/b1/p". Once enough processes have created their corresponding
-nodes, joined processes can start the computation.
+内存屏障是一个原语操作，可以使得一组进程同步执行。实现的主要思路就是：
 
-In this example, each process instantiates a Barrier object, and its constructor takes as parameters:
+存在一个屏障节点，可以作为进程节点的父节点运行。假定将屏障节点称作`/b1`.每个进程p会创建节点`/b1/p`.一旦创建了足够的进程节点,就会启动计算.
 
-- the address of a ZooKeeper server (e.g., "zoo1.foo.com:2181")
-- the path of the barrier node on ZooKeeper (e.g., "/b1")
-- the size of the group of processes
+下述示例中,每个进程初始化了一个内存屏障的对象,且构造器需要如下属性:
 
-The constructor of Barrier passes the address of the Zookeeper server to the
-constructor of the parent class. The parent class creates a ZooKeeper instance if
-one does not exist. The constructor of Barrier then creates a
-barrier node on ZooKeeper, which is the parent node of all process nodes, and
-we call root (**Note:** This is not the ZooKeeper root "/").
++ zk服务器的地址(例如:"zoo1.foo.com:2181")
++ 屏障节点的zk路径(例如:`/b1`)
++ 进程组的大小
 
-```
+内存屏障构造器传递zk服务器的地址到父类构造器中,父类在zk实例不存在的时候,创建一个.内存屏障的构造器然后会在zk上创建一个内存屏障节点,这个父节点是所有进程节点的父节点.称作**根节点**(注意不是zk的根节点`/`)
+
+```java
 /**
  * Barrier constructor
  *
@@ -114,17 +107,11 @@ Barrier(String address, String root, int size) {
 }
 ```
 
-To enter the barrier, a process calls enter(). The process creates a node under
-the root to represent it, using its host name to form the node name. It then wait
-until enough processes have entered the barrier. A process does it by checking
-the number of children the root node has with "getChildren()", and waiting for
-notifications in the case it does not have enough. To receive a notification when
-there is a change to the root node, a process has to set a watch, and does it
-through the call to "getChildren()". In the code, we have that "getChildren()"
-has two parameters. The first one states the node to read from, and the second is
-a boolean flag that enables the process to set a watch. In the code the flag is true.
+为了进入内容屏障,一个进程需要调用`enter()`方法,进程在根节点下创建一个节点代表内存屏障.使用主机名称去构建节点名称.然后等待到有足够的进程进入内存屏障.一个进程会检查根节点下子节点的数量(使用`getChildren()`),或者等待进程不足的提示.
 
-```
+如果根节点发送了改变,会接收到提示,会有一个进程会被设置为监视状态,且会通过`getChildren()`方法调用.在下述代码中,`getChildren()`包含两个参数,第一个是节点的读取形式,第二个是一个标志,这个标志允许这个进程处于监视状态下.
+
+```java
 /**
  * Join barrier
  *
@@ -150,17 +137,13 @@ boolean enter() throws KeeperException, InterruptedException{
 }
 ```
 
-Note that enter() throws both KeeperException and InterruptedException, so it is
-the responsibility of the application to catch and handle such exceptions.
+注意到`enter()`方法抛出了`KeeperException `和`InterruptedException`,需要这个进程能够处理这些异常.
 
-Once the computation is finished, a process calls leave() to leave the barrier.
-First it deletes its corresponding node, and then it gets the children of the root
-node. If there is at least one child, then it waits for a notification (obs: note
-that the second parameter of the call to getChildren() is true, meaning that
-ZooKeeper has to set a watch on the root node). Upon reception of a notification,
-it checks once more whether the root node has any children.
+一旦计算完成,进程会调用`leave()`,去离开内存屏障.
 
-```
+首先删除相应的节点,然后获取根节点的子节点.如果至少一个子节点,就会等待通知信息(如果开启监视的话).根据监视的结果,检查根节点是否有其他子节点.
+
+```java
 /**
  * Wait until all reach barrier
  *
@@ -184,23 +167,17 @@ boolean leave() throws KeeperException, InterruptedException {
     }
 ```
 
-<a name="sc_producerConsumerQueues"></a>
 
-## Producer-Consumer Queues
 
-A producer-consumer queue is a distributed data structure that groups of processes
-use to generate and consume items. Producer processes create new elements and add
-them to the queue. Consumer processes remove elements from the list, and process them.
-In this implementation, the elements are simple integers. The queue is represented
-by a root node, and to add an element to the queue, a producer process creates a new node,
-a child of the root node.
+#### 生产者消费者队列
 
-The following excerpt of code corresponds to the constructor of the object. As
-with Barrier objects, it first calls the constructor of the parent class, SyncPrimitive,
-that creates a ZooKeeper object if one doesn't exist. It then verifies if the root
-node of the queue exists, and creates if it doesn't.
+生产者消费者队列是一个分布式的数据结构,进程组用于在这个数据结构中生成和消费对象。生产者进程创建新元素且将其添加到队列中。消费者进程会从列表中移除元素，并对其处理。
 
-```
+在下述示例中,元素仅仅是一个整形,队列由根节点代码,并添加元素到队列中,一个生产者进程会创建一个节点(根节点的子节点).
+
+下述代码演示了对应的数据结构,作为内存屏障的对象,首先需要调用父类的构造器进行同步,如果不存在则会创建zk对象,然后验证是否队列的根节点存在,如果不存在则创建.
+
+```java
 /**
  * Constructor of producer-consumer queue
  *
@@ -229,14 +206,9 @@ Queue(String address, String name) {
 }
 ```
 
-A producer process calls "produce()" to add an element to the queue, and passes
-an integer as an argument. To add an element to the queue, the method creates a
-new node using "create()", and uses the SEQUENCE flag to instruct ZooKeeper to
-append the value of the sequencer counter associated to the root node. In this way,
-we impose a total order on the elements of the queue, thus guaranteeing that the
-oldest element of the queue is the next one consumed.
+生产者进程调用`produce()`,添加元素到队列中,传递一个整形的参数.方法使用`create()`创建一个新节点,添加到队列中,使用`SEQUENCE`标记直到zk添加根节点相关的队列计数器.这种方式下,利用队列中元素的排序,确保队列中最老的元素是下一个消费的(LRU).
 
-```
+```java
 /**
  * Add element to the queue.
  *
@@ -258,18 +230,11 @@ boolean produce(int i) throws KeeperException, InterruptedException{
 }
 ```
 
-To consume an element, a consumer process obtains the children of the root node,
-reads the node with smallest counter value, and returns the element. Note that
-if there is a conflict, then one of the two contending processes won't be able to
-delete the node and the delete operation will throw an exception.
+消费者进程获取根节点的子节点,用于消费元素.且消费者会读取节点的最小计数值,并返回这个元素.注意到如果存在冲突,那么冲突的进程不会删除节点,如果删除节点就会抛出异常.
 
-A call to getChildren() returns the list of children in lexicographic order.
-As lexicographic order does not necessarily follow the numerical order of the counter
-values, we need to decide which element is the smallest. To decide which one has
-the smallest counter value, we traverse the list, and remove the prefix "element"
-from each one.
+`getChildren()`调用返回了子节点的列表(按字典排序的).因为字典排序不需要遵守计数值的数字属性,所以需要决定哪个元素是最小的.为了决定哪个计数值是最小的,需要变量整个列表,移除每个的前缀值.
 
-```
+```java
 /**
  * Remove first element from the queue.
  *
@@ -310,55 +275,52 @@ int consume() throws KeeperException, InterruptedException{
 }
 ```
 
-<a name="Complete+example"></a>
 
-## Complete example
 
-In the following section you can find a complete command line application to demonstrate the above mentioned
-recipes. Use the following command to run it.
 
-```
+### 完整实例
+
+---
+
+运行下述指令
+
+```shell
 ZOOBINDIR="[path_to_distro]/bin"
 . "$ZOOBINDIR"/zkEnv.sh
 java SyncPrimitive [Test Type] [ZK server] [No of elements] [Client type]
 ```
 
-<a name="Queue+test"></a>
+**生成者消费者队列测试**
 
-### Queue test
++ 启动生产者,创建100个元素
 
-Start a producer to create 100 elements
-
-```
-java SyncPrimitive qTest localhost 100 p
-
+```shell
+$ java SyncPrimitive qTest localhost 100 p
 ```
 
-Start a consumer to consume 100 elements
++ 启动消费者,消费100个元素
 
-```
-java SyncPrimitive qTest localhost 100 c
-
-```
-
-<a name="Barrier+test"></a>
-
-### Barrier test
-
-Start a barrier with 2 participants (start as many times as many participants you'd like to enter)
-
-```
-java SyncPrimitive bTest localhost 2
-
+```shell
+$ java SyncPrimitive qTest localhost 100 c
 ```
 
-<a name="sc_sourceListing"></a>
+##### 内存屏障测试
 
-### Source Listing
+其他内存屏障,使用两个参与者
 
-#### SyncPrimitive.Java
-
+```shell
+$ java SyncPrimitive bTest localhost 2
 ```
+
+
+
+#### 源码
+
+---
+
+##### SyncPrimitive.Java
+
+```java
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
