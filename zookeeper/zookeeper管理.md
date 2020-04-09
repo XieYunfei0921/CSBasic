@@ -328,308 +328,112 @@ zk的行为有zk配置空间，如果使用了不同的配置文件，注意保�
 | *quorumListenOnAllIPs*                        | 是否zk会监视同级ip地址<br />这个会影响处理ZAB协议的过程和快速leader选举过程，默认false |                                                           |
 | *multiAddress.<br />reachabilityCheckEnabled* | 是否检查可到达性                                             | **zookeeper.multiAddress.<br />reachabilityCheckEnabled** |
 
-#### 
+
 
 ##### 取消数据目录的自动创建
 
 这个功能是zk 3.5中新增的功能，默认zk服务器时会自动创建数据目录的。这个会非常的不方便,且有时候会非常的危险.考虑到运行服务器期间配置发生了变化,`dataDir`参数就会发生了变化.
 
- When the ZooKeeper server is
-restarted it will create this non-existent directory and begin
-serving - with an empty znode namespace. This scenario can
-result in an effective "split brain" situation (i.e. data in
-both the new invalid directory and the original valid data
-store). As such is would be good to have an option to turn off
-this autocreate behavior. In general for production
-environments this should be done, unfortunately however the
-default legacy behavior cannot be changed at this point and
-therefore this must be done on a case by case basis. This is
-left to users and to packagers of ZooKeeper distributions.
+zk重启的时候,会创建不存在的目录,且启动空的znode命名空间.这种情况下可能会导致***脑裂***的情况(数据既处于新的数据目录中也位于旧的数据存储中).所以自动关闭创建时一件很好地功能.
 
-When running **zkServer.sh** autocreate can be disabled
-by setting the environment variable **ZOO_DATADIR_AUTOCREATE_DISABLE** to 1.
-When running ZooKeeper servers directly from class files this
-can be accomplished by setting **zookeeper.datadir.autocreate=false** on
-the java command line, i.e. **-Dzookeeper.datadir.autocreate=false**
+总体来说,在生成环境下应当去进行配置,但是不幸的是虽然默认的行为不能现在改版,且因此需要根据情况处理.
 
-When this feature is disabled, and the ZooKeeper server
-determines that the required directories do not exist it will
-generate an error and refuse to start.
+当运行`zkServer.sh`自动创建会被关闭.通过设置环境变量`ZOO_DATADIR_AUTOCREATE_DISABLE`为1.有类文件直接启动zk的时候需要设置`zookeeper.datadir.autocreate=false`,可以通过java命令行参数控制`-Dzookeeper.datadir.autocreate=false`
 
-A new script **zkServer-initialize.sh** is provided to
-support this new feature. If autocreate is disabled it is
-necessary for the user to first install ZooKeeper, then create
-the data directory (and potentially txnlog directory), and
-then start the server. Otherwise as mentioned in the previous
-paragraph the server will not start. Running **zkServer-initialize.sh** will create the
-required directories, and optionally setup the myid file
-(optional command line parameter). This script can be used
-even if the autocreate feature itself is not used, and will
-likely be of use to users as this (setup, including creation
-of the myid file) has been an issue for users in the past.
-Note that this script ensures the data directories exist only,
-it does not create a config file, but rather requires a config
-file to be available in order to execute.
+当关闭自动创建的功能的时候,zk服务器决定哪些目录不应当存在,且会生成错误且拒绝启动.
 
-<a name="sc_db_existence_validation"></a>
+新脚本`zkServer-initialize.sh`提供这个功能,如果自动创建关闭,首先安装zk就很重要,然后创建数据目录,然后是启动zk服务器.
 
-#### Enabling db existence validation
+否则像前面提到的一样会拒绝启动.运行这个脚本会创建需要的目录,且可能创建`myid`文件(也可以是命令行参数).这个脚本在自动创建没有使用的时候也可以使用,
 
-**New in 3.6.0:** The default
-behavior of a ZooKeeper server on startup when no data tree
-is found is to set zxid to zero and join the quorum as a
-voting member. This can be dangerous if some event (e.g. a
-rogue 'rm -rf') has removed the data directory while the
-server was down since this server may help elect a leader
-that is missing transactions. Enabling db existence validation
-will change the behavior on startup when no data tree is
-found: the server joins the ensemble as a non-voting participant
-until it is able to sync with the leader and acquire an up-to-date
-version of the ensemble data. To indicate an empty data tree is
-expected (ensemble creation), the user should place a file
-'initialize' in the same directory as 'myid'. This file will
-be detected and deleted by the server on startup.
+注意到这个脚本仅仅保证了数据目录存在,不会创建配置文件,但是需要执行的配置文件.
 
-Initialization validation can be enabled when running
-ZooKeeper servers directly from class files by setting
-**zookeeper.db.autocreate=false**
-on the java command line, i.e.
-**-Dzookeeper.db.autocreate=false**.
-Running **zkServer-initialize.sh**
-will create the required initialization file.
+##### 开启数据块存在性校验
 
-<a name="sc_performance_options"></a>
+zk 3.6.0新增特性: zk服务器默认行为,用于没有数据树的时候启动.将zxid设置为零,且作为参与投票的成员加入`quorum`中.如果服务器宕机的时候数据目录移除了,这时候就危险了.因为服务器帮助选择了的leader,这个leader丢失了事务.
 
-#### Performance Tuning Options
+允许数据块存在性校验会改变没有数据时候的启动行为.服务器加入集群的时候是作为一个非投票成员直到可以与leader同步为止才可以投票.且获取集群数据的最新版本数据.
 
-**New in 3.5.0:** Several subsystems have been reworked
-to improve read throughput. This includes multi-threading of the NIO communication subsystem and
-request processing pipeline (Commit Processor). NIO is the default client/server communication
-subsystem. Its threading model comprises 1 acceptor thread, 1-N selector threads and 0-M
-socket I/O worker threads. In the request processing pipeline the system can be configured
-to process multiple read request at once while maintaining the same consistency guarantee
-(same-session read-after-write). The Commit Processor threading model comprises 1 main
-thread and 0-N worker threads.
+为了表明空数据树排除在外,用户需要初始化一个与`myid`一样的初始化文件.这个文件会启动期间被服务器发现和删除.初始化验证在运行zk服务器的时候开启,通过设置**zookeeper.db.autocreate=false**,也可以通过java参数传入**-Dzookeeper.db.autocreate=false**.运行`zkServer-initialize.sh`创建需要的初始化文件。
 
-The default values are aimed at maximizing read throughput on a dedicated ZooKeeper machine.
-Both subsystems need to have sufficient amount of threads to achieve peak read throughput.
+##### 性能协调配置
 
-* *zookeeper.nio.numSelectorThreads* :
-    (Java system property only: **zookeeper.nio.numSelectorThreads**)
-    **New in 3.5.0:**
-    Number of NIO selector threads. At least 1 selector thread required.
-    It is recommended to use more than one selector for large numbers
-    of client connections. The default value is sqrt( number of cpu cores / 2 ).
+zk 3.5.0新功能，多个子系统用于提示读性能。这个包括多线程NIO子系统和请求处理pipeline.NIO是默认客户端/服务器沟通子系统.线程模型使用了一个接收器,1-N个选择器线程和0-M个IO socket线程.在请求处理的pipeline中,系统可以处理多个读取请求,且能够保证数据一致性的要求.
 
-* *zookeeper.nio.numWorkerThreads* :
-    (Java system property only: **zookeeper.nio.numWorkerThreads**)
-    **New in 3.5.0:**
-    Number of NIO worker threads. If configured with 0 worker threads, the selector threads
-    do the socket I/O directly. The default value is 2 times the number of cpu cores.
+默认配置旨在最大化zk读取数量.子系统需要承受峰值读取量.
 
-* *zookeeper.commitProcessor.numWorkerThreads* :
-    (Java system property only: **zookeeper.commitProcessor.numWorkerThreads**)
-    **New in 3.5.0:**
-    Number of Commit Processor worker threads. If configured with 0 worker threads, the main thread
-    will process the request directly. The default value is the number of cpu cores.
+| 参数名称                                             | java参数                                               | 介绍                                          |
+| ---------------------------------------------------- | ------------------------------------------------------ | --------------------------------------------- |
+| *zookeeper.nio.numSelectorThreads*                   | **zookeeper.nio.numSelectorThreads**                   | zk NIO选择器线程数量,最小为1                  |
+| *zookeeper.nio.numWorkerThreads*                     | **zookeeper.nio.numWorkerThreads**                     | NIO worker线程数量,最小0个,默认为cpu核心数2倍 |
+| *zookeeper.commitProcessor<br />                     | **zookeeper.commitProcessor<br />.numWorkerThreads**   | 用于提交处理的线程数量，最小为0               |
+| *zookeeper.commitProcessor<br />.maxReadBatchSize*   | **zookeeper.<br />commitProcessor.maxReadBatchSize**   | 单次最大读取数量                              |
+| *zookeeper.commitProcessor<br />.maxCommitBatchSize* | **zookeeper.<br />commitProcessor.maxCommitBatchSize** | 进行读取之前最大提交数量                      |
+| *znode.container.checkIntervalMs*                    |                                                        | 候选容器/TTL节点检查周期                      |
+| *znode.container.maxPerMinute*                       |                                                        | 容器/TTL节点每分钟删除最大数量                |
+| *znode.container.<br />maxNeverUsedIntervalMs*       |                                                        | 空容器时间间隔                                |
 
-* *zookeeper.commitProcessor.maxReadBatchSize* :
-    (Java system property only: **zookeeper.commitProcessor.maxReadBatchSize**)
-    Max number of reads to process from queuedRequests before switching to processing commits.
-    If the value < 0 (default), we switch whenever we have a local write, and pending commits.
-    A high read batch size will delay commit processing, causing stale data to be served.
-    If reads are known to arrive in fixed size batches then matching that batch size with
-    the value of this property can smooth queue performance. Since reads are handled in parallel,
-    one recommendation is to set this property to match *zookeeper.commitProcessor.numWorkerThread*
-    (default is the number of cpu cores) or lower.
+##### 调试可观察的配置
 
-* *zookeeper.commitProcessor.maxCommitBatchSize* :
-    (Java system property only: **zookeeper.commitProcessor.maxCommitBatchSize**)
-    Max number of commits to process before processing reads. We will try to process as many
-    remote/local commits as we can till we reach this count. A high commit batch size will delay
-    reads while processing more commits. A low commit batch size will favor reads.
-    It is recommended to only set this property when an ensemble is serving a workload with a high
-    commit rate. If writes are known to arrive in a set number of batches then matching that
-    batch size with the value of this property can smooth queue performance. A generic
-    approach would be to set this value to equal the ensemble size so that with the processing
-    of each batch the current server will probabilistically handle a write related to one of
-    its direct clients.
-    Default is "1". Negative and zero values are not supported.
+zk 3.6.0新功能: 下述配置可以使得zk方便调试
 
-* *znode.container.checkIntervalMs* :
-    (Java system property only)
-    **New in 3.6.0:** The
-    time interval in milliseconds for each check of candidate container
-    and ttl nodes. Default is "60000".
+| 参数名称                              | 介绍                                                   |
+| ------------------------------------- | ------------------------------------------------------ |
+| *zookeeper.messageTracker.BufferSize* | 控制消息定位器中的最大消息数量。需要是正整数，默认10。 |
+| *zookeeper.messageTracker.Enabled*    | 设置为true，则运行消息定位器追踪消息。默认false        |
 
-* *znode.container.maxPerMinute* :
-    (Java system property only)
-    **New in 3.6.0:** The
-    maximum number of container and ttl nodes that can be deleted per
-    minute. This prevents herding during container deletion.
-    Default is "10000".
+##### 管理服务器配置
 
-* *znode.container.maxNeverUsedIntervalMs* :
-    (Java system property only)
-    **New in 3.6.0:** The
-    maximum interval in milliseconds that a container that has never had
-    any children is retained. Should be long enough for your client to
-    create the container, do any needed work and then create children.
-    Default is "0" which is used to indicate that containers
-    that have never had any children are never deleted.
+| 参数名称                | java参数                            | 介绍                           |
+| ----------------------- | ----------------------------------- | ------------------------------ |
+| *admin.portUnification* | **zookeeper.admin.portUnification** | 允许管理端口接受HTTP/HTTPS请求 |
+| *admin.enableServer*    | **zookeeper.admin.enableServer**    | 是否启动管理器服务器           |
+| *admin.serverAddress*   | **zookeeper.admin.serverAddress**   | 管理器服务器地址,默认0.0.0.0   |
+| *admin.serverPort*      | **zookeeper.admin.serverPort**      | 管理器服务器端口,默认8080      |
+| *admin.idleTimeout*     | **zookeeper.admin.idleTimeout**     | 最大空载时间,默认30000ms       |
+| *admin.commandURL*      | **zookeeper.admin.commandURL**      | 控制URL,默认为`/commands`      |
 
-<a name="sc_debug_observability_config"></a>
 
-#### Debug Observability Configurations
 
-**New in 3.6.0:** The following options are introduced to make zookeeper easier to debug.
+#### 度量值参数
 
-* *zookeeper.messageTracker.BufferSize* :
-    (Java system property only)
-    Controls the maximum number of messages stored in **MessageTracker**. Value should be positive
-    integers. The default value is 10. **MessageTracker** is introduced in **3.6.0** to record the
-    last set of messages between a server (follower or observer) and a leader, when a server
-    disconnects with leader. These set of messages will then be dumped to zookeeper's log file,
-    and will help reconstruct the state of the servers at the time of the disconnection and
-    will be useful for debugging purpose.
+| 参数                            | 介绍                                                         |
+| ------------------------------- | ------------------------------------------------------------ |
+| *metricsProvider.className*     | 设置这个为`org.apache.zookeeper.<br />metrics.prometheus.PrometheusMetricsProvider`开启Promethous |
+| *metricsProvider.httpPort*      | Promethous会启动一个jetty服务器,默认端口7000                 |
+| *metricsProvider.exportJvmInfo* | 设置为true则Promethous会用于JVM参数的度量,默认true           |
 
-* *zookeeper.messageTracker.Enabled* :
-    (Java system property only)
-    When set to "true", will enable **MessageTracker** to track and record messages. Default value
-    is "false".
+#### 使用Netty进行交互
 
-<a name="sc_adminserver_config"></a>
+在zk 3.5之后，zk服务器可以使用netty，而不是使用默认的nio。可以通过设置参数`zookeeper.serverCnxnFactory`和`zookeeper.clientCnxnSocket`
 
-#### AdminServer configuration
+##### Quorum TLS
 
-**New in 3.6.0:** The following
-options are used to configure the [AdminServer](#sc_adminserver).
+zk 3.5.5新增配置，基于netty框架，zk集群可以使用TLS加密进行通信。这个部分描述如何配置加密。
 
-* *admin.portUnification* :
-    (Java system property: **zookeeper.admin.portUnification**)
-    Enable the admin port to accept both HTTP and HTTPS traffic.
-    Defaults to disabled.
+注意Quorum TLS可以保证leader选举和quorum沟通协议的安全，需要创建SSL的key存储器去存储本地证书。每个zk实例都需要创建一个key存储。
 
-**New in 3.5.0:** The following
-options are used to configure the [AdminServer](#sc_adminserver).
+在这个例子中使用自定义的证书，存储私钥到`keystore.jks`中.适合于测试使用,生成环境下需要官方的密钥.
 
-* *admin.enableServer* :
-    (Java system property: **zookeeper.admin.enableServer**)
-    Set to "false" to disable the AdminServer.  By default the
-    AdminServer is enabled.
+> 注意列表`-alias`和可标识的名称`-dname`必须匹配机器的主机名称.否则主机验证不会生效.
 
-* *admin.serverAddress* :
-    (Java system property: **zookeeper.admin.serverAddress**)
-    The address the embedded Jetty server listens on. Defaults to 0.0.0.0.
-
-* *admin.serverPort* :
-    (Java system property: **zookeeper.admin.serverPort**)
-    The port the embedded Jetty server listens on.  Defaults to 8080.
-
-* *admin.idleTimeout* :
-    (Java system property: **zookeeper.admin.idleTimeout**)
-    Set the maximum idle time in milliseconds that a connection can wait
-    before sending or receiving data. Defaults to 30000 ms.
-
-* *admin.commandURL* :
-    (Java system property: **zookeeper.admin.commandURL**)
-    The URL for listing and issuing commands relative to the
-    root URL.  Defaults to "/commands".
-
-### Metrics Providers
-
-**New in 3.6.0:** The following options are used to configure metrics.
-
- By default ZooKeeper server exposes useful metrics using the [AdminServer](#sc_adminserver).
- and [Four Letter Words](#sc_4lw) interface.
-
- Since 3.6.0 you can configure a different Metrics Provider, that exports metrics
- to your favourite system.
-
- Since 3.6.0 ZooKeeper binary package bundles an integration with [Prometheus.io](https://prometheus.io)
-
-* *metricsProvider.className* :
-    Set to "org.apache.zookeeper.metrics.prometheus.PrometheusMetricsProvider" to
-    enable Prometheus.io exporter.
-
-* *metricsProvider.httpPort* :
-    Prometheus.io exporter will start a Jetty server and bind to this port, it default to 7000.
-    Prometheus end point will be http://hostname:httPort/metrics.
-
-* *metricsProvider.exportJvmInfo* :
-    If this property is set to **true** Prometheus.io will export useful metrics about the JVM.
-    The default is true.
-
-<a name="Communication+using+the+Netty+framework"></a>
-
-### Communication using the Netty framework
-
-[Netty](http://netty.io)
-is an NIO based client/server communication framework, it
-simplifies (over NIO being used directly) many of the
-complexities of network level communication for java
-applications. Additionally the Netty framework has built
-in support for encryption (SSL) and authentication
-(certificates). These are optional features and can be
-turned on or off individually.
-
-In versions 3.5+, a ZooKeeper server can use Netty
-instead of NIO (default option) by setting the environment
-variable **zookeeper.serverCnxnFactory**
-to **org.apache.zookeeper.server.NettyServerCnxnFactory**;
-for the client, set **zookeeper.clientCnxnSocket**
-to **org.apache.zookeeper.ClientCnxnSocketNetty**.
-
-<a name="Quorum+TLS"></a>
-
-#### Quorum TLS
-
-*New in 3.5.5*
-
-Based on the Netty Framework ZooKeeper ensembles can be set up
-to use TLS encryption in their communication channels. This section
-describes how to set up encryption on the quorum communication.
-
-Please note that Quorum TLS encapsulates securing both leader election
-and quorum communication protocols.
-
-1. Create SSL keystore JKS to store local credentials
-
-One keystore should be created for each ZK instance.
-
-In this example we generate a self-signed certificate and store it
-together with the private key in `keystore.jks`. This is suitable for
-testing purposes, but you probably need an official certificate to sign
-your keys in a production environment.
-
-Please note that the alias (`-alias`) and the distinguished name (`-dname`)
-must match the hostname of the machine that is associated with, otherwise
-hostname verification won't work.
-
-```
+```shell
 keytool -genkeypair -alias $(hostname -f) -keyalg RSA -keysize 2048 -dname "cn=$(hostname -f)" -keypass password -keystore keystore.jks -storepass password
 ```
 
-2. Extract the signed public key (certificate) from keystore
+2. 从key存储中抓取公钥
 
-*This step might only necessary for self-signed certificates.*
-
-```
+```shell
 keytool -exportcert -alias $(hostname -f) -keystore keystore.jks -file $(hostname -f).cer -rfc
 ```
 
-3. Create SSL truststore JKS containing certificates of all ZooKeeper instances
+3. 创建SSL信任的zk实例JKS认证
 
-The same truststore (storing all accepted certs) should be shared on
-participants of the ensemble. You need to use different aliases to store
-multiple certificates in the same truststore. Name of the aliases doesn't matter.
-
-```
+```shell
 keytool -importcert -alias [host1..3] -file [host1..3].cer -keystore truststore.jks -storepass password
 ```
 
-4. You need to use `NettyServerCnxnFactory` as serverCnxnFactory, because SSL is not supported by NIO.
-Add the following configuration settings to your `zoo.cfg` config file:
+4. 使用`NettyServerCnxnFactory`作为serverCnxnFactory,因为SSL不支持NIO.添加下述配置到`zoo.cfg`中
 
 ```
 sslQuorum=true
@@ -640,7 +444,7 @@ ssl.quorum.trustStore.location=/path/to/truststore.jks
 ssl.quorum.trustStore.password=password
 ```
 
-5. Verify in the logs that your ensemble is running on TLS:
+5. 验证TLS上的日志信息
 
 ```
 INFO  [main:QuorumPeer@1789] - Using TLS encrypted quorum communication
@@ -649,18 +453,12 @@ INFO  [main:QuorumPeer@1797] - Port unification disabled
 INFO  [QuorumPeerListener:QuorumCnxManager$Listener@877] - Creating TLS-only quorum server socket
 ```
 
-<a name="Upgrading+existing+nonTLS+cluster"></a>
+##### 非TLS集群的降级
 
-#### Upgrading existing non-TLS cluster with no downtime
+zk 3.5.5的新功能,下述步骤需要在非TLS集群中进行,用于对集群进行降级
 
-*New in 3.5.5*
-
-Here are the steps needed to upgrade an already running ZooKeeper ensemble
-to TLS without downtime by taking advantage of port unification functionality.
-
-1. Create the necessary keystores and truststores for all ZK participants as described in the previous section
-
-2. Add the following config settings and restart the first node
+1. 创建必要的key存储和信任存储,用在zk的参与者范围内.
+2. 添加下述配置,并重启第一个节点
 
 ```
 sslQuorum=false
@@ -672,9 +470,9 @@ ssl.quorum.trustStore.location=/path/to/truststore.jks
 ssl.quorum.trustStore.password=password
 ```
 
-Note that TLS is not yet enabled, but we turn on port unification.
+注意这时候TLS还没开枪,需要开启端口统一.
 
-3. Repeat step #2 on the remaining nodes. Verify that you see the following entries in the logs:
+3. 在其他节点重复操作二,验证日志
 
 ```
 INFO  [main:QuorumPeer@1791] - Using insecure (non-TLS) quorum communication
@@ -683,17 +481,14 @@ INFO  [main:QuorumPeer@1797] - Port unification enabled
 INFO  [QuorumPeerListener:QuorumCnxManager$Listener@874] - Creating TLS-enabled quorum server socket
 ```
 
-You should also double check after each node restart that the quorum become healthy again.
-
-4. Enable Quorum TLS on each node and do rolling restart:
+4. 开启每个节点上的Quorum TLS并且进行轮询重启
 
 ```
 sslQuorum=true
 portUnification=true
 ```
 
-5. Once you verified that your entire ensemble is running on TLS, you could disable port unification
-and do another rolling restart
+5. 一旦确定所有节点都运行在TLS下,可以关闭端口统一并进行下一轮的轮询重启
 
 ```
 sslQuorum=true
@@ -701,510 +496,200 @@ portUnification=false
 ```
 
 
-<a name="sc_zkCommands"></a>
 
-### ZooKeeper Commands
+#### Zookeeper指令
 
-<a name="sc_4lw"></a>
+##### 四字指令
 
-#### The Four Letter Words
+| 指令名称 | 功能                                                         |
+| -------- | ------------------------------------------------------------ |
+| `conf`   | 打印服务配置的详细信息                                       |
+| `cons`   | 列举当前服务器所有连接/会话信息                              |
+| `crst`   | 重置连接/会话的统计值                                        |
+| `dump`   | 列举重要会话和临时节点                                       |
+| `envi`   | 打印服务器环境变量信息                                       |
+| `ruok`   | 测试服务器是否处于没有错误的状态下，如果正在运行则回复`imok` |
+| `srst`   | 重置服务器统计值                                             |
+| `srvr`   | 列举服务器详细信息                                           |
+| `stat`   | 列举服务器和连接的客户端简要信息                             |
+| `wchs`   | 列举服务器的观察者简要信息                                   |
+| `wchc`   | 列举服务器观察者详细信息                                     |
+| `dirs`   | 显示快照的总大小和日志文件                                   |
+| `wchp`   | 服务器观察者的详细信息                                       |
+| `mntr`   | 输出监视集群健康信息的变量表                                 |
+| `isro`   | 测试服务器是否处于只读模式中                                 |
+| `hash`   | 返回zxid相关的最新历史                                       |
+| `gtmk`   | 获取64位的追踪码                                             |
+| `stmk`   | 获取追踪码                                                   |
 
-ZooKeeper responds to a small set of commands. Each command is
-composed of four letters. You issue the commands to ZooKeeper via telnet
-or nc, at the client port.
-
-Three of the more interesting commands: "stat" gives some
-general information about the server and connected clients,
-while "srvr" and "cons" give extended details on server and
-connections respectively.
-
-**New in 3.5.3:**
-Four Letter Words need to be explicitly white listed before using.
-Please refer **4lw.commands.whitelist**
-described in [cluster configuration section](#sc_clusterOptions) for details.
-Moving forward, Four Letter Words will be deprecated, please use
-[AdminServer](#sc_adminserver) instead.
-
-* *conf* :
-    **New in 3.3.0:** Print
-    details about serving configuration.
-
-* *cons* :
-    **New in 3.3.0:** List
-    full connection/session details for all clients connected
-    to this server. Includes information on numbers of packets
-    received/sent, session id, operation latencies, last
-    operation performed, etc...
-
-* *crst* :
-    **New in 3.3.0:** Reset
-    connection/session statistics for all connections.
-
-* *dump* :
-    Lists the outstanding sessions and ephemeral nodes.
-
-* *envi* :
-    Print details about serving environment
-
-* *ruok* :
-    Tests if server is running in a non-error state. The server
-    will respond with imok if it is running. Otherwise it will not
-    respond at all.
-    A response of "imok" does not necessarily indicate that the
-    server has joined the quorum, just that the server process is active
-    and bound to the specified client port. Use "stat" for details on
-    state wrt quorum and client connection information.
-
-* *srst* :
-    Reset server statistics.
-
-* *srvr* :
-    **New in 3.3.0:** Lists
-    full details for the server.
-
-* *stat* :
-    Lists brief details for the server and connected
-    clients.
-
-* *wchs* :
-    **New in 3.3.0:** Lists
-    brief information on watches for the server.
-
-* *wchc* :
-    **New in 3.3.0:** Lists
-    detailed information on watches for the server, by
-    session.  This outputs a list of sessions(connections)
-    with associated watches (paths). Note, depending on the
-    number of watches this operation may be expensive (ie
-    impact server performance), use it carefully.
-
-* *dirs* :
-    **New in 3.5.1:**
-    Shows the total size of snapshot and log files in bytes
-
-* *wchp* :
-    **New in 3.3.0:** Lists
-    detailed information on watches for the server, by path.
-    This outputs a list of paths (znodes) with associated
-    sessions. Note, depending on the number of watches this
-    operation may be expensive (ie impact server performance),
-    use it carefully.
-
-* *mntr* :
-    **New in 3.4.0:** Outputs a list
-    of variables that could be used for monitoring the health of the cluster.
+###### 追踪码表
 
 
-    $ echo mntr | nc localhost 2185
-                  zk_version  3.4.0
-                  zk_avg_latency  0.7561              - be account to four decimal places
-                  zk_max_latency  0
-                  zk_min_latency  0
-                  zk_packets_received 70
-                  zk_packets_sent 69
-                  zk_outstanding_requests 0
-                  zk_server_state leader
-                  zk_znode_count   4
-                  zk_watch_count  0
-                  zk_ephemerals_count 0
-                  zk_approximate_data_size    27
-                  zk_followers    4                   - only exposed by the Leader
-                  zk_synced_followers 4               - only exposed by the Leader
-                  zk_pending_syncs    0               - only exposed by the Leader
-                  zk_open_file_descriptor_count 23    - only available on Unix platforms
-                  zk_max_file_descriptor_count 1024   - only available on Unix platforms
+| Trace Mask Bit Values |                     |
+|-----------------------|---------------------|
+| 0b0000000000 | Unused, reserved for future use. |
+| 0b0000000010 | Logs client requests, excluding ping requests. |
+| 0b0000000100 | Unused, reserved for future use. |
+| 0b0000001000 | Logs client ping requests. |
+| 0b0000010000 | Logs packets received from the quorum peer that is the current leader, excluding ping requests. |
+| 0b0000100000 | Logs addition, removal and validation of client sessions. |
+| 0b0001000000 | Logs delivery of watch events to client sessions. |
+| 0b0010000000 | Logs ping packets received from the quorum peer that is the current leader. |
+| 0b0100000000 | Unused, reserved for future use. |
+| 0b1000000000 | Unused, reserved for future use. |
 
+##### 管理服务器
 
-The output is compatible with java properties format and the content
-may change over time (new keys added). Your scripts should expect changes.
-ATTENTION: Some of the keys are platform specific and some of the keys are only exported by the Leader.
-The output contains multiple lines with the following format:
+管理服务器是一个嵌入式的jetty服务器,提供了HTTP接口,用于接收四字指令.默认情况下,服务器启动在8080端口上,指令可以通过`/command/[command_name]`访问.指令响应返回一个JSON.
 
+但是这里没有严格的四字限制.
 
-    key \t value
+默认情况下开启了管理器服务器,可以通过下述方法关闭:
 
++ ` zookeeper.admin.enableServer=false`
++ 从类路径中移除jetty
 
-* *isro* :
-    **New in 3.4.0:** Tests if
-    server is running in read-only mode.  The server will respond with
-    "ro" if in read-only mode or "rw" if not in read-only mode.
+注意到TCP的四字接口在管理服务器中关闭了,可用的指令包括:
 
-* *hash* :
-    **New in 3.6.0:**
-    Return the latest history of the tree digest associated with zxid.
++ *connection_stat_reset/crst*
 
-* *gtmk* :
-    Gets the current trace mask as a 64-bit signed long value in
-    decimal format.  See `stmk` for an explanation of
-    the possible values.
+  重置所有客户端统计值
 
-* *stmk* :
-    Sets the current trace mask.  The trace mask is 64 bits,
-    where each bit enables or disables a specific category of trace
-    logging on the server.  Log4J must be configured to enable
-    `TRACE` level first in order to see trace logging
-    messages.  The bits of the trace mask correspond to the following
-    trace logging categories.
++ *configuration/conf/config*
 
-    | Trace Mask Bit Values |                     |
-    |-----------------------|---------------------|
-    | 0b0000000000 | Unused, reserved for future use. |
-    | 0b0000000010 | Logs client requests, excluding ping requests. |
-    | 0b0000000100 | Unused, reserved for future use. |
-    | 0b0000001000 | Logs client ping requests. |
-    | 0b0000010000 | Logs packets received from the quorum peer that is the current leader, excluding ping requests. |
-    | 0b0000100000 | Logs addition, removal and validation of client sessions. |
-    | 0b0001000000 | Logs delivery of watch events to client sessions. |
-    | 0b0010000000 | Logs ping packets received from the quorum peer that is the current leader. |
-    | 0b0100000000 | Unused, reserved for future use. |
-    | 0b1000000000 | Unused, reserved for future use. |
+  打印所有服务器的基本配置
 
-    All remaining bits in the 64-bit value are unused and
-    reserved for future use.  Multiple trace logging categories are
-    specified by calculating the bitwise OR of the documented values.
-    The default trace mask is 0b0100110010.  Thus, by default, trace
-    logging includes client requests, packets received from the
-    leader and sessions.
-    To set a different trace mask, send a request containing the
-    `stmk` four-letter word followed by the trace
-    mask represented as a 64-bit signed long value.  This example uses
-    the Perl `pack` function to construct a trace
-    mask that enables all trace logging categories described above and
-    convert it to a 64-bit signed long value with big-endian byte
-    order.  The result is appended to `stmk` and sent
-    to the server using netcat.  The server responds with the new
-    trace mask in decimal format.
++ *connections/cons*
 
+  客户端给服务器的信息,注意依靠客户端连接的操作开销较大,返回链接
 
-    $ perl -e "print 'stmk', pack('q>', 0b0011111010)" | nc localhost 2181
-    250
++ *hash*
 
-Here's an example of the **ruok**
-command:
+  返回事务消费列表信息
 
++ *dirs*
 
-    $ echo ruok | nc 127.0.0.1 5111
-        imok
-
-
-<a name="sc_adminserver"></a>
-
-#### The AdminServer
-
-**New in 3.5.0:** The AdminServer is
-an embedded Jetty server that provides an HTTP interface to the four
-letter word commands.  By default, the server is started on port 8080,
-and commands are issued by going to the URL "/commands/\[command name]",
-e.g., http://localhost:8080/commands/stat.  The command response is
-returned as JSON.  Unlike the original protocol, commands are not
-restricted to four-letter names, and commands can have multiple names;
-for instance, "stmk" can also be referred to as "set_trace_mask".  To
-view a list of all available commands, point a browser to the URL
-/commands (e.g., http://localhost:8080/commands).  See the [AdminServer configuration options](#sc_adminserver_config)
-for how to change the port and URLs.
-
-The AdminServer is enabled by default, but can be disabled by either:
-
-* Setting the zookeeper.admin.enableServer system
-  property to false.
-* Removing Jetty from the classpath.  (This option is
-  useful if you would like to override ZooKeeper's jetty
-  dependency.)
-
-Note that the TCP four letter word interface is still available if
-the AdminServer is disabled.
-
-Available commands include:
-
-* *connection_stat_reset/crst*:
-    Reset all client connection statistics.
-    No new fields returned.
-
-* *configuration/conf/config* :
-    Print basic details about serving configuration, e.g.
-    client port, absolute path to data directory.
-
-* *connections/cons* :
-    Information on client connections to server.
-    Note, depending on the number of client connections this operation may be expensive
-    (i.e. impact server performance).
-    Returns "connections", a list of connection info objects.
-
-* *hash*:
-    Txn digests in the historical digest list.
-    One is recorded every 128 transactions.
-    Returns "digests", a list to transaction digest objects.
-
-* *dirs* :
-    Information on logfile directory and snapshot directory
-    size in bytes.
-    Returns "datadir_size" and "logdir_size".
+  日志目录和快照目录的大小信息
 
 * *dump* :
-    Information on session expirations and ephemerals.
-    Note, depending on the number of global sessions and ephemerals
-    this operation may be expensive (i.e. impact server performance).
-    Returns "expiry_time_to_session_ids" and "session_id_to_ephemeral_paths" as maps.
+
+    会话和临时节点信息.
 
 * *environment/env/envi* :
-    All defined environment variables.
-    Returns each as its own field.
+    
+    所有环境变量信息
 
 * *get_trace_mask/gtmk* :
-    The current trace mask. Read-only version of *set_trace_mask*.
-    See the description of the four letter command *stmk* for
-    more details.
-    Returns "tracemask".
-
+    
+    当前追踪码信息
+    
 * *initial_configuration/icfg* :
-    Print the text of the configuration file used to start the peer.
-    Returns "initial_configuration".
+    
+    打印配置文件信息
 
 * *is_read_only/isro* :
-    A true/false if this server is in read-only mode.
-    Returns "read_only".
+    
+    返回是否是只读
 
 * *last_snapshot/lsnp* :
-    Information of the last snapshot that zookeeper server has finished saving to disk.
-    If called during the initial time period between the server starting up
-    and the server finishing saving its first snapshot, the command returns the
-    information of the snapshot read when starting up the server.
-    Returns "zxid" and "timestamp", the latter using a time unit of seconds.
-
+    
+    返回zxid和时间戳信息,最新的快照时间,单位为秒
+    
 * *leader/lead* :
-    If the ensemble is configured in quorum mode then emits the current leader
-    status of the peer and the current leader location.
-    Returns "is_leader", "leader_id", and "leader_ip".
-
+    
+    返回是否是leader,leader的id以及ip地址
+    
 * *monitor/mntr* :
-    Emits a wide variety of useful info for monitoring.
-    Includes performance stats, information about internal queues, and
-    summaries of the data tree (among other things).
-    Returns each as its own field.
-
+    
+    返回本身的参数
+    
 * *observer_connection_stat_reset/orst* :
-    Reset all observer connection statistics. Companion command to *observers*.
-    No new fields returned.
+    
+    重置所有观察者的统计信息
 
 * *ruok* :
-    No-op command, check if the server is running.
-    A response does not necessarily indicate that the
-    server has joined the quorum, just that the admin server
-    is active and bound to the specified port.
-    No new fields returned.
-
+    
+    nop操作，检查服务器是否处于运行状态。
+    
 * *set_trace_mask/stmk* :
-    Sets the trace mask (as such, it requires a parameter).
-    Write version of *get_trace_mask*.
-    See the description of the four letter command *stmk* for
-    more details.
-    Returns "tracemask".
-
+    
+    返回追踪码
+    
 * *server_stats/srvr* :
-    Server information.
-    Returns multiple fields giving a brief overview of server state.
+    
+    服务器信息，返回多个属性，用于对服务状态进行简单描述
 
 * *stats/stat* :
-    Same as *server_stats* but also returns the "connections" field (see *connections*
-    for details).
-    Note, depending on the number of client connections this operation may be expensive
-    (i.e. impact server performance).
-
+    
+    服务器信息，同时会返回链接信息
+    
 * *stat_reset/srst* :
-    Resets server statistics. This is a subset of the information returned
-    by *server_stats* and *stats*.
-    No new fields returned.
-
+    
+    重置服务器统计信息，是*status*的子集
+    
 * *observers/obsr* :
-    Information on observer connections to server.
-    Always available on a Leader, available on a Follower if its
-    acting as a learner master.
-    Returns "synced_observers" (int) and "observers" (list of per-observer properties).
-
+    
+    观察者连接到服务器的信息
+    
 * *system_properties/sysp* :
-    All defined system properties.
-    Returns each as its own field.
+    
+    系统参数
 
 * *voting_view* :
-    Provides the current voting members in the ensemble.
-    Returns "current_config" as a map.
+    
+    提供当前系统中的投票信息，以map形式返回
 
 * *watches/wchc* :
-    Watch information aggregated by session.
-    Note, depending on the number of watches this operation may be expensive
-    (i.e. impact server performance).
-    Returns "session_id_to_watched_paths" as a map.
-
+    
+    以会话形式聚合的观察者信息，以map形式返回
+    
 * *watches_by_path/wchp* :
-    Watch information aggregated by path.
-    Note, depending on the number of watches this operation may be expensive
-    (i.e. impact server performance).
-    Returns "path_to_session_ids" as a map.
-
+    
+    以路径聚合的观察者信息，以map形式返回
+    
 * *watch_summary/wchs* :
-    Summarized watch information.
-    Returns "num_total_watches", "num_paths", and "num_connections".
+    
+    观察者详细信息
 
 * *zabstate* :
-    The current phase of Zab protocol that peer is running and whether it is a
-    voting member.
-    Peers can be in one of these phases: ELECTION, DISCOVERY, SYNCHRONIZATION, BROADCAST.
-    Returns fields "voting" and "zabstate".
+    
+    当前ZAB协议状态，可以为ELECTION, DISCOVERY, SYNCHRONIZATION, BROADCAST状态
 
+#### 数据文件管理
 
-<a name="sc_dataFileManagement"></a>
+zk将数据存储到数据目录中，且将事务日志存储到事务日志目录中。默认情况下，两个目录相同。服务器可以配置存储到不同的位置。
 
-### Data File Management
+##### 数据目录
 
-ZooKeeper stores its data in a data directory and its transaction
-log in a transaction log directory. By default these two directories are
-the same. The server can (and should) be configured to store the
-transaction log files in a separate directory than the data files.
-Throughput increases and latency decreases when transaction logs reside
-on a dedicated log devices.
+数据目录包含下属文件
 
-<a name="The+Data+Directory"></a>
++ **myid**： 包含单个整数，表示服务器编号
++ **initialize**： 表示缺少数据树，创建的时候需要清理数据树
++ **snapshot.<zxid>**： 持有数据树的模糊快照
 
-#### The Data Directory
+每个zk服务器都有唯一的标识符,这个id有两个参数唯一标识.分别是`myid`文件和**配置文件**.`myid`文件表示服务器需要响应给定的数据目录.配置文件列举了服务器的连接信息.
 
-This directory has two or three files in it:
+当zk启动的时候,会读取`myid`的id信息,然后使用id从配置文件中查找需要监听的端口.
 
-* *myid* - contains a single integer in
-  human readable ASCII text that represents the server id.
-* *initialize* - presence indicates lack of
-  data tree is expected. Cleaned up once data tree is created.
-* *snapshot.<zxid>* - holds the fuzzy
-  snapshot of a data tree.
+存储在数据目录中的快照文件某种意义上是模糊的快照.zk服务器可以获取快照,根据数据树进行更新.
 
-Each ZooKeeper server has a unique id. This id is used in two
-places: the *myid* file and the configuration file.
-The *myid* file identifies the server that
-corresponds to the given data directory. The configuration file lists
-the contact information for each server identified by its server id.
-When a ZooKeeper server instance starts, it reads its id from the
-*myid* file and then, using that id, reads from the
-configuration file, looking up the port on which it should
-listen.
+快照文件名称的后缀是`zxid`,这个是zk的事务编号.是上次提交的事务快照.
 
-The *snapshot* files stored in the data
-directory are fuzzy snapshots in the sense that during the time the
-ZooKeeper server is taking the snapshot, updates are occurring to the
-data tree. The suffix of the *snapshot* file names
-is the _zxid_, the ZooKeeper transaction id, of the
-last committed transaction at the start of the snapshot. Thus, the
-snapshot includes a subset of the updates to the data tree that
-occurred while the snapshot was in process. The snapshot, then, may
-not correspond to any data tree that actually existed, and for this
-reason we refer to it as a fuzzy snapshot. Still, ZooKeeper can
-recover using this snapshot because it takes advantage of the
-idempotent nature of its updates. By replaying the transaction log
-against fuzzy snapshots ZooKeeper gets the state of the system at the
-end of the log.
+因此,快照会包含快照更新过程中的数据树的更新.这个快照然后就不会响应已经存在数据树的改变了.
 
-<a name="The+Log+Directory"></a>
+然后,zk可以从快照中恢复.通过重新进行实物日志,可以获取日志最后的状态.
 
-#### The Log Directory
+##### 日志目录
 
-The Log Directory contains the ZooKeeper transaction logs.
-Before any update takes place, ZooKeeper ensures that the transaction
-that represents the update is written to non-volatile storage. A new
-log file is started when the number of transactions written to the
-current log file reaches a (variable) threshold. The threshold is
-computed using the same parameter which influences the frequency of
-snapshotting (see snapCount and snapSizeLimitInKb above). The log file's
-suffix is the first zxid written to that log.
+日志目录包含zk的事务日志.在更新之前,zk保证日志的更新会写出到稳定的存储中.
 
-<a name="sc_filemanagement"></a>
+新的日志文件在达到日志文件写出需要的容量的时候开始写出.这个容量使用了快照参数进行计算.日志文件的后缀是第一个写入到日志的zxid.
 
-#### File Management
+##### 文件管理
 
-The format of snapshot and log files does not change between
-standalone ZooKeeper servers and different configurations of
-replicated ZooKeeper servers. Therefore, you can pull these files from
-a running replicated ZooKeeper server to a development machine with a
-stand-alone ZooKeeper server for troubleshooting.
+快照和日志文件不会因为单机模式或者是不同zk服务器配置间发生变化.因此,需要将这些文件从服务器上拉取下来.放在开发环境下进行调试.
 
-Using older log and snapshot files, you can look at the previous
-state of ZooKeeper servers and even restore that state.
+如果使用旧的日志和快照文件,可以查看zk服务器的过去状态,甚至可以对其进行恢复.
 
-The ZooKeeper server creates snapshot and log files, but
-never deletes them. The retention policy of the data and log
-files is implemented outside of the ZooKeeper server. The
-server itself only needs the latest complete fuzzy snapshot, all log
-files following it, and the last log file preceding it.  The latter
-requirement is necessary to include updates which happened after this
-snapshot was started but went into the existing log file at that time.
-This is possible because snapshotting and rolling over of logs
-proceed somewhat independently in ZooKeeper. See the
-[maintenance](#sc_maintenance) section in
-this document for more details on setting a retention policy
-and maintenance of ZooKeeper storage.
+zk虽然创建了快照和日志文件,但是不会删除.数据和日志文件的保存策略有zk外部实现.zk仅仅需要最新完整版快照,所有日志文件需要跟踪它.
 
-###### Note
->The data stored in these files is not encrypted. In the case of
-storing sensitive data in ZooKeeper, necessary measures need to be
-taken to prevent unauthorized access. Such measures are external to
-ZooKeeper (e.g., control access to the files) and depend on the
-individual settings in which it is being deployed.
-
-<a name="Recovery+-+TxnLogToolkit"></a>
-
-#### Recovery - TxnLogToolkit
-More details can be found in [this](http://zookeeper.apache.org/doc/current/zookeeperTools.html#zkTxnLogToolkit)
-
-<a name="sc_commonProblems"></a>
-
-### Things to Avoid
-
-Here are some common problems you can avoid by configuring
-ZooKeeper correctly:
-
-* *inconsistent lists of servers* :
-    The list of ZooKeeper servers used by the clients must match
-    the list of ZooKeeper servers that each ZooKeeper server has.
-    Things work okay if the client list is a subset of the real list,
-    but things will really act strange if clients have a list of
-    ZooKeeper servers that are in different ZooKeeper clusters. Also,
-    the server lists in each Zookeeper server configuration file
-    should be consistent with one another.
-
-* *incorrect placement of transaction log* :
-    The most performance critical part of ZooKeeper is the
-    transaction log. ZooKeeper syncs transactions to media before it
-    returns a response. A dedicated transaction log device is key to
-    consistent good performance. Putting the log on a busy device will
-    adversely affect performance. If you only have one storage device,
-    increase the snapCount so that snapshot files are generated less often;
-    it does not eliminate the problem, but it makes more resources available
-    for the transaction log.
-
-* *incorrect Java heap size* :
-    You should take special care to set your Java max heap size
-    correctly. In particular, you should not create a situation in
-    which ZooKeeper swaps to disk. The disk is death to ZooKeeper.
-    Everything is ordered, so if processing one request swaps the
-    disk, all other queued requests will probably do the same. the
-    disk. DON'T SWAP.
-    Be conservative in your estimates: if you have 4G of RAM, do
-    not set the Java max heap size to 6G or even 4G. For example, it
-    is more likely you would use a 3G heap for a 4G machine, as the
-    operating system and the cache also need memory. The best and only
-    recommend practice for estimating the heap size your system needs
-    is to run load tests, and then make sure you are well below the
-    usage limit that would cause the system to swap.
-
-* *Publicly accessible deployment* :
-    A ZooKeeper ensemble is expected to operate in a trusted computing environment.
-    It is thus recommended to deploy ZooKeeper behind a firewall.
-
-<a name="sc_bestPractices"></a>
-
-### Best Practices
-
-For best results, take note of the following list of good
-Zookeeper practices:
-
-For multi-tenant installations see the [section](zookeeperProgrammers.html#ch_zkSessions)
-detailing ZooKeeper "chroot" support, this can be very useful
-when deploying many applications/services interfacing to a
-single ZooKeeper cluster.
