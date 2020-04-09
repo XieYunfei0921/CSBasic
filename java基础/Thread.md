@@ -129,3 +129,74 @@ private void exit() {
 
 ##### void stop()
 
+```markdown
+强制线程停止
+如果安装了安全管理器,这里就会调用{@code checkAccess}方法,会导致当前线程出现异常{@code SecurityException}
+如果这个先出不是当前线程,也就是说需要停止其他线程,安全管理器会检查权限{@code checkPermission}这里也会抛出{@code checkPermission}异常
+无论如何,线程都会被强制停止,作为异常类型返回一个{@code ThreadDeath}对象.
+允许停止一个还没开始的线程,如果线程启动了则会立即停止.
+顶层错误处理器会对未被捕捉的异常进行响应，但是不会打印异常原因。除非异常原因是{@code ThreadDeath}才会提示
+注意： 这是一非弃用的方法,这个方法是不安全的,使用这种方式停止线程会引发所有监视器解锁.如果这其中有受到锁保护的对象,那么被摧毁的对象对于其他线程可见,很有可能导致结果的随机性.许多对{@code stop}的可以使用简单修改变量,使得线程结束的方式替代.目标线程周期性检测变量值,如果变量表明需要停止的时候就返回.如果目标线程长期等待,可以使用{@code interupt}停止
+```
+
+##### void interrupt()
+
+```markdown
+除非当前线程自我中断,否则这个操作是一直被允许的,检查权限{@code checkAccess}方法会被调用,可能抛出安全异常.如果线程由于{@code wait}方法处于阻塞状态.可以使用{@code wait(long)}进行有限等待.
+或者使用{@code join}或者{@code sleep}方法。如果等待不到则会清除中断标志位，并抛出中断异常。
+1. 如果线程因为IO阻塞{@code InterruptibleChannel},这种情况下会关闭通道并设置中断标志位,线程会接收到异常.
+2. 如果线程因为选择器的原因阻塞(NIO).那么设置中断标志位,并返回,可能是一个非零值.
+3. 其他情况下,将线程的中断标志位置位
+```
+
+##### boolean isInterrupted(boolean ClearInterrupted)
+
+```markdown
+测试是否线程已经被中断,中断标志位重置会在传递过来的{@code ClearInterrupted}
+```
+
+##### void suspend()
+
+```markdown
+暂停当前线程
+首先,使用{@code checkAccess}方法,检查可能出现的安全异常,如果线程存活,将其暂停,除非其又被重启.
+注意: 这个方法被弃用了,因为可能导致死锁.如果目标线程持有保护系统重要资源的锁,在这种情况下进行暂停的时候,没有资源可以获取到资源,除非线程被重新执行.
+```
+
+##### void resume()
+
+```markdown
+重启暂停的线程
+首先使用{@code checkAccess}方法检查可能出现的安全异常,如果线程存活但是被暂停挂起,这个就会重启线程,允许其继续执行.
+注意: 这个方法是弃用的,因为与{@code suspend}配合使用的原因
+```
+
+##### int activeCount() 
+
+```markdown
+返回当前线程组中激活线程的数量
+这个返回值由于在内部数据结构中遍历,所以会动态改变,且会收到当前系统线程的影响.这个方法主要用于debug或者监视的目的.
+```
+
+##### void join(long millis, int nanos)
+
+```markdown
+等待{@code mills}ms和{@code ns}用于线程死亡.
+这个实现使用了存活状态下的循环等待.当一个线程结束的时候,使用{@code notifyAll}唤醒线程.
+推荐使用{@code wait},{@code notify},{@code notifyAll}.
+```
+
+##### void dumpStack()
+
+```markdown
+打印标准错误流下的栈追踪信息,使用在debug模式下
+```
+
+##### boolean holdsLock(Object obj)
+
+```markdown
+当且仅当当且线程持有obj对象的锁的时候返回true.
+这个方法用于运行断言程序持有了某个对象的锁:
+	assert Thread.holdsLock(obj);
+```
+
