@@ -171,7 +171,7 @@
      >
      > 你可以选择提交方式
 
-   +  使用标准输入构建镜像(不会发送**构建上下文**)
+   + 使用标准输入构建镜像(不会发送**构建上下文**)
 
      使用从`stdin` 构建的`dockerfile`.不去发送额外的文件(**构建上下文**).连字符号(-)占用路径`PATH`的位置,知道docker读取**构建上下文**.
 
@@ -182,7 +182,9 @@
      下述例子时使用标准输入构建的`dockerfile`
 
      ```shell
+     # 注意镜像名称必须要小写,否则名称不合法
      docker build -t myimage:latest -<<EOF
+     
      FROM busybox
      RUN echo "hello world"
      EOF
@@ -224,6 +226,7 @@
 
      ```shell
      docker build -t myimage:latest -f- https://github.com/docker-library/hello-world.git <<EOF
+     
      FROM busybox
      COPY hello.c .
      EOF
