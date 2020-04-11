@@ -74,210 +74,136 @@ zk是一个整体性的协议,不会在意个别的proposal.而是将proposal流
 
 #### leader激活
 
-Leader activation includes leader election (`FastLeaderElection`).
-ZooKeeper messaging doesn't care about the exact method of electing a leader as long as the following holds:
+leader激活包含了leader选举(`FastLeaderElection`).zk消息不会在意选举leader的具体方法.只需要遵守如下规则即可:
 
-* The leader has seen the highest zxid of all the followers.
-* A quorum of servers have committed to following the leader.
++ leader可以找到最大zxid对应的follower
++ quorum服务器已经提交,用于跟随leader
 
-Of these two requirements only the first, the highest zxid among the followers
-needs to hold for correct operation. The second requirement, a quorum of followers,
-just needs to hold with high probability. We are going to recheck the second requirement,
-so if a failure happens during or after the leader election and quorum is lost,
-we will recover by abandoning leader activation and running another election.
+只有满足这两个条件,最大zxid需要持有正确的操作.第二个需求,follower的quorum仅仅需要大概率的保证即可.需要重新检测第二个条件,如果leader选举之后出现了异常,并且quorum丢失,通过抛弃leader激活状态,并且启动另一个选举来恢复.
 
-After leader election a single server will be designated as a leader and start
-waiting for followers to connect. The rest of the servers will try to connect to
-the leader. The leader will sync up with the followers by sending any proposals they
-are missing, or if a follower is missing too many proposals, it will send a full
-snapshot of the state to the follower.
+leader选举之后,一个服务器会当做leader启动,等待follower的连接.剩余的服务器会尝试连接leader.
 
-There is a corner case in which a follower that has proposals, `U`, not seen
-by a leader arrives. Proposals are seen in order, so the proposals of `U` will have a zxids
-higher than zxids seen by the leader. The follower must have arrived after the
-leader election, otherwise the follower would have been elected leader given that
-it has seen a higher zxid. Since committed proposals must be seen by a quorum of
-servers, and a quorum of servers that elected the leader did not see `U`, the proposals
-of `U` have not been committed, so they can be discarded. When the follower connects
-to the leader, the leader will tell the follower to discard `U`.
+leader通过发送proposal给follower进行同步,如果follower丢失大量proposal,就会发送完整的快照给follower.
 
-A new leader establishes a zxid to start using for new proposals by getting the
-epoch, e, of the highest zxid it has seen and setting the next zxid to use to be
-(e+1, 0), after the leader syncs with a follower, it will propose a NEW_LEADER
-proposal. Once the NEW_LEADER proposal has been committed, the leader will activate
-and start receiving and issuing proposals.
+存在下述的边界情况,一个follower持有proposal`U`.leader到达的时候不可见.由于proposal是按照顺序排序的,所以U的proposal的zxid大于其他follower的.follower必须在选举之后才能出现,否则如果持有更高的zxid,这个follower可能被选举成leader.
 
-It all sounds complicated but here are the basic rules of operation during leader
-activation:
+由于提交的proposal必须被服务器quorum发现,选举成leader的quorum没有发现U,所以U的proposal没有提交,所以被弃用了.
 
-* A follower will ACK the NEW_LEADER proposal after it has synced with the leader.
-* A follower will only ACK a NEW_LEADER proposal with a given zxid from a single server.
-* A new leader will COMMIT the NEW_LEADER proposal when a quorum of followers has ACKed it.
-* A follower will commit any state it received from the leader when the NEW_LEADER proposal is COMMIT.
-* A new leader will not accept new proposals until the NEW_LEADER proposal has been COMMITTED.
+当follower连接到leader的时候,leader会告知U已经被抛弃了.
 
-If leader election terminates erroneously, we don't have a problem since the
-NEW_LEADER proposal will not be committed since the leader will not have quorum.
-When this happens, the leader and any remaining followers will timeout and go back
-to leader election.
+通过获取新的**分界点**(epoch),新的leader完成zxid,用于启动新的proposal的使用.
 
-<a name="sc_activeMessaging"></a>
+> 较高的zxid被发现且跳转到下一个zxid,即(e+1,0).
+>
+> leader同步完follower之后,会产生**新增leader**的proposal.
+>
+> 一旦的**新增leader**被提交,leader会激活且开始接受和处理proposal.
 
-### Active Messaging
+这个听起来挺复杂的,但是激活期间只需要遵守如下基本规则即可:
 
-Leader Activation does all the heavy lifting. Once the leader is coronated he can
-start blasting out proposals. As long as he remains the leader no other leader can
-emerge since no other leader will be able to get a quorum of followers. If a new
-leader does emerge,
-it means that the leader has lost quorum, and the new leader will clean up any
-mess left over during her leadership activation.
++ follower在同步完leader之后,需要回应**新建Leader**(NEW_LEADER)的proposal
++ 使用单台服务器的给定zxid.follower会回应**新建leader(NEW_LEADER)**的proposal
++ 一个新的leader在follower响应之后提交**新建leader**的proposal
++ **新建leader**请求提交之后，一个follower会提交从leader传递过来的状态
 
-ZooKeeper messaging operates similar to a classic two-phase commit.
+* 在新建leader请求被提交之前，新的leader不会接受新的proposal
+
+如果leader选举由于失败终止，因为leader没有quorum的原因,新建leader的proposal不会提交,所以不会存在问题.如果发生了这种情况其他follower和leader会超时并返回leader选举.
+
+#### 消息激活
+
+leader激活进行了所有重操作,一旦选举处理leader就会开始处理proposal.只要保留了leader,其他leader就不会出现,因为其他leader没办法持有follower的quorum信息.
+
+如果一个leader出现了,意味着leader丢失了quorum,且新的leader会清除剩余的信息.
+
+zk消息操作类似于典型的双向提交.
 
 ![Two phase commit](images/2pc.jpg)
 
-All communication channels are FIFO, so everything is done in order. Specifically
-the following operating constraints are observed:
+所以消息通道都是FIFO的,所以都是按照顺序处理的.尤其是下述操作:
 
-* The leader sends proposals to all followers using
-  the same order. Moreover, this order follows the order in which requests have been
-  received. Because we use FIFO channels this means that followers also receive proposals in order.
-* Followers process messages in the order they are received. This
-  means that messages will be ACKed in order and the leader will receive ACKs from
-  followers in order, due to the FIFO channels. It also means that if message `m`
-  has been written to non-volatile storage, all messages that were proposed before
-  `m` have been written to non-volatile storage.
-* The leader will issue a COMMIT to all followers as soon as a
-  quorum of followers have ACKed a message. Since messages are ACKed in order,
-  COMMITs will be sent by the leader as received by the followers in order.
-* COMMITs are processed in order. Followers deliver a proposal
-  message when that proposal is committed.
++ leader发送proposal给所有follower,使用相同的顺序,除此之外,这个顺序遵循请求接受的顺序,因为使用了FIFO通道,所以意味着接受的时候也是按照顺序的.
++ follower按照接受顺序处理消息,这个意味着回复消息也是按照顺序的.且leader接受响应也是按照顺序的.由于使用的是FIFO通道,所以保证会写入到可靠存储中,所有消息都会写到可靠存储中.
++ 一旦follower的quorum响应了一条消息之后,leader会发起提交给所有的follower.由于响应是按照顺序处理的.提交发送顺序也是有序的.
++ 提交按照顺序处理,follower会在proposal提交的时候发送proposal消息.
 
-<a name="sc_summary"></a>
+#### 总结
 
-### Summary
+下面处理其工作原理,为什么受到leader信任的proposal集合总是包含提交的proposal的原因.
 
-So there you go. Why does it work? Specifically, why does a set of proposals
-believed by a new leader always contain any proposal that has actually been committed?
-First, all proposals have a unique zxid, so unlike other protocols, we never have
-to worry about two different values being proposed for the same zxid; followers
-(a leader is also a follower) see and record proposals in order; proposals are
-committed in order; there is only one active leader at a time since followers only
-follow a single leader at a time; a new leader has seen all committed proposals
-from the previous epoch since it has seen the highest zxid from a quorum of servers;
-any uncommitted proposals from a previous epoch seen by a new leader will be committed
-by that leader before it becomes active.
+首先,所有proposal都有唯一的zxid,与其他协议不同的是,从来不需要担心不同的两个值被同一个zxid处理.
 
-<a name="sc_comparisons"></a>
+follower顺序地观察和记录proposal,proposal按照顺序提交,同一时刻只有一个激活的leader.(因为其具有最大zxid特征的原因).
 
-### Comparisons
+一个新的leader会从之前的分界点信息中观测到所有提交的proposal信息,任何之前分界点中未提交的proposal会被新的leader观测到,并提交.
 
-Isn't this just Multi-Paxos? No, Multi-Paxos requires some way of assuring that
-there is only a single coordinator. We do not count on such assurances. Instead
-we use the leader activation to recover from leadership change or old leaders
-believing they are still active.
+#### 比较(与多重Paxos)
 
-Isn't this just Paxos? Your active messaging phase looks just like phase 2 of Paxos?
-Actually, to us active messaging looks just like 2 phase commit without the need to
-handle aborts. Active messaging is different from both in the sense that it has
-cross proposal ordering requirements. If we do not maintain strict FIFO ordering of
-all packets, it all falls apart. Also, our leader activation phase is different from
-both of them. In particular, our use of epochs allows us to skip blocks of uncommitted
-proposals and to not worry about duplicate proposals for a given zxid.
+多重Paxos需要保证是单个协调者的措施.不需要再这种断言下进行计数.相反使用了leader激活去恢复leader关系的改变或者是旧的leader确信其处于激活状态.
 
-<a name="sc_consistency"></a>
+但是也不像Paxos,因为激活消息的时候使用了双向提交.确实对于我们来说,双向提交消息,且不需要处理消息抛弃的情况.消息的激活不同于proposal的交叉排序.如果没有保证数据包严格的FIFO性质,就不能保障顺序.
+
+同样的,选举激活不同于paxos,特别地,使用分界点(epoch)用于跳过未提交的proposal,且不需要担心proposal的重复.
+
+#### 一致性保证
+
+zk的一致性包含连续一致性和线性一致性.指令会解释额外的zk一致性保证方法.
+
+zk写操作是线性化的,换句话说,每个写操作会原子性的影响客户端提交和接受请求.这意味着所有zk客户端的写操作可以根据写的实时顺序进行排序.但是很少去讨论线性一致性,只有在使用读取操作的时候,才会涉及到这个参数.
+
+zk中的读取操作不是线性一致性的,因为可以返回旧的数据.因为读取操作在zk中不是quorum操作,且服务器会立即响应客户端的读取操作.zk这个做是为了提升读取性能.
+
+但是zk的读取操作是连续一致性的,因为读取操作会在客户端操作中影响序列顺序.正常方式是除了读取操作时使用同步措施.这个也没有严格保证数据实时更新,因为同步也不是一个quorum操作.
+
+总体来说,zk一致性的保证使用osc保证.这个处于连续一致性和线性一致性之间.
+
+#### Quorums
+
+原子广播和leader选举使用quorum去保证系统的一致性,默认情况下zk使用大量的quorum.意味着每次投票发生在这些协议中,所以需要大量的quorum支持.
+
+典型的例子就是一个leader发生proposal,leader可以在接收端服务器quorums响应信息的情况下提交.
+
+如果需要获取需要的属性,只需要保证进程组通过投票来验证操作.但是可以通过其他方式构建大量的quorums.
+
+例如可以指定投票服务器的权重,也就是说一些服务器的权重比较高.为了获取quorum,需要获取足够的支持,以便于获取大于半数的支持.
+
+另一种构造方式使用权重,且广泛使用与分层架构中.使用这种方式,将服务器分层多个不相交的组,且分配每组的权限,为了构建一个quorum,需要获取组G足够的支持(满足半数要求).
+
+#### 日志系统
+
+zk使用slf4j用于日志系统的抽象层.最终使用了log4j 1.2版本作为最终实现.
+
+为了获取更好的嵌入式支持,对于终端用于将来的版本运行日志实现的选择.
+
+因此,,使用slf4j的api配置日志写出功能,而不是配置log4j.
+
+注意slf4j没有fatal等级,,fatal级别的信息会被移动到error等级.
+
+##### 在正确等级进行日志处理
+
+slf4j中有多个日志等级
+
++ ERROR等级: 错误事件,但是可以允许任务继续执行
++ WARN等级: 可能有害的情况
++ INFO等级: 提示信息
++ DEBUG等级: 用于调试应用的信息
++ TRACE等级: 栈追踪信息
+
+##### 标准slf4j的使用
+
+静态消息日志
+
+```shell
+LOG.debug("process completed successfully!");
+```
 
 
-## Consistency Guarantees
 
-The [consistency](https://jepsen.io/consistency) guarantees of ZooKeeper lie between sequential consistency and linearizability. In this section, we explain the exact consistency guarantees that ZooKeeper provides.
+```shell
+LOG.debug("got {} messages in {} minutes",new Object[]{count,time});
+```
 
-Write operations in ZooKeeper are *linearizable*. In other words, each `write` will appear to take effect atomically at some point between when the client issues the request and receives the corresponding response. This means that the writes performed by all the clients in ZooKeeper can be totally ordered in such a way that respects the real-time ordering of these writes. However, merely stating that write operations are linearizable is meaningless unless we also talk about read operations.
-
-Read operations in ZooKeeper are *not linearizable* since they can return potentially stale data. This is because a `read` in ZooKeeper is not a quorum operation and a server will respond immediately to a client that is performing a `read`. ZooKeeper does this because it prioritizes performance over consistency for the read use case. However, reads in ZooKeeper are *sequentially consistent*, because `read` operations will appear to take effect in some sequential order that furthermore respects the order of each client's operations. A common pattern to work around this is to issue a `sync` before issuing a `read`. This too does **not** strictly guarantee up-to-date data because `sync` is [not currently a quorum operation](https://issues.apache.org/jira/browse/ZOOKEEPER-1675). To illustrate, consider a scenario where two servers simultaneously think they are the leader, something that could occur if the TCP connection timeout is smaller than `syncLimit * tickTime`. Note that this is [unlikely](https://www.amazon.com/ZooKeeper-Distributed-Coordination-Flavio-Junqueira/dp/1449361307) to occur in practice, but should be kept in mind nevertheless when discussing strict theoretical guarantees. Under this scenario, it is possible that the `sync` is served by the “leader” with stale data, thereby allowing the following `read` to be stale as well. The stronger guarantee of linearizability is provided if an actual quorum operation (e.g., a `write`) is performed before a `read`.
-
-Overall, the consistency guarantees of ZooKeeper are formally captured by the notion of [ordered sequential consistency](http://webee.technion.ac.il/people/idish/ftp/OSC-IPL17.pdf) or `OSC(U)` to be exact, which lies between sequential consistency and linearizability.
-
-<a name="sc_quorum"></a>
-
-## Quorums
-
-Atomic broadcast and leader election use the notion of quorum to guarantee a consistent
-view of the system. By default, ZooKeeper uses majority quorums, which means that every
-voting that happens in one of these protocols requires a majority to vote on. One example is
-acknowledging a leader proposal: the leader can only commit once it receives an
-acknowledgement from a quorum of servers.
-
-If we extract the properties that we really need from our use of majorities, we have that we only
-need to guarantee that groups of processes used to validate an operation by voting (e.g., acknowledging
-a leader proposal) pairwise intersect in at least one server. Using majorities guarantees such a property.
-However, there are other ways of constructing quorums different from majorities. For example, we can assign
-weights to the votes of servers, and say that the votes of some servers are more important. To obtain a quorum,
-we get enough votes so that the sum of weights of all votes is larger than half of the total sum of all weights.
-
-A different construction that uses weights and is useful in wide-area deployments (co-locations) is a hierarchical
-one. With this construction, we split the servers into disjoint groups and assign weights to processes. To form
-a quorum, we have to get a hold of enough servers from a majority of groups G, such that for each group g in G,
-the sum of votes from g is larger than half of the sum of weights in g. Interestingly, this construction enables
-smaller quorums. If we have, for example, 9 servers, we split them into 3 groups, and assign a weight of 1 to each
-server, then we are able to form quorums of size 4. Note that two subsets of processes composed each of a majority
-of servers from each of a majority of groups necessarily have a non-empty intersection. It is reasonable to expect
-that a majority of co-locations will have a majority of servers available with high probability.
-
-With ZooKeeper, we provide a user with the ability of configuring servers to use majority quorums, weights, or a
-hierarchy of groups.
-
-<a name="sc_logging"></a>
-
-## Logging
-
-Zookeeper uses [slf4j](http://www.slf4j.org/index.html) as an abstraction layer for logging. [log4j](http://logging.apache.org/log4j) in version 1.2 is chosen as the final logging implementation for now.
-For better embedding support, it is planned in the future to leave the decision of choosing the final logging implementation to the end user.
-Therefore, always use the slf4j api to write log statements in the code, but configure log4j for how to log at runtime.
-Note that slf4j has no FATAL level, former messages at FATAL level have been moved to ERROR level.
-For information on configuring log4j for
-ZooKeeper, see the [Logging](zookeeperAdmin.html#sc_logging) section
-of the [ZooKeeper Administrator's Guide.](zookeeperAdmin.html)
-
-<a name="sc_developerGuidelines"></a>
-
-### Developer Guidelines
-
-Please follow the  [slf4j manual](http://www.slf4j.org/manual.html) when creating log statements within code.
-Also read the [FAQ on performance](http://www.slf4j.org/faq.html#logging\_performance), when creating log statements. Patch reviewers will look for the following:
-
-<a name="sc_rightLevel"></a>
-
-#### Logging at the Right Level
-
-There are several levels of logging in slf4j.
-
-It's important to pick the right one. In order of higher to lower severity:
-
-1. ERROR level designates error events that might still allow the application to continue running.
-1. WARN level designates potentially harmful situations.
-1. INFO level designates informational messages that highlight the progress of the application at coarse-grained level.
-1. DEBUG Level designates fine-grained informational events that are most useful to debug an application.
-1. TRACE Level designates finer-grained informational events than the DEBUG.
-
-ZooKeeper is typically run in production such that log messages of INFO level
-severity and higher (more severe) are output to the log.
-
-<a name="sc_slf4jIdioms"></a>
-
-#### Use of Standard slf4j Idioms
-
-_Static Message Logging_
-
-    LOG.debug("process completed successfully!");
-
-However when creating parameterized messages are required, use formatting anchors.
-
-    LOG.debug("got {} messages in {} minutes",new Object[]{count,time});
-
-_Naming_
-
-Loggers should be named after the class in which they are used.
+Logger需要使用之后才能进行记录
 
     public class Foo {
         private static final Logger LOG = LoggerFactory.getLogger(Foo.class);
@@ -285,7 +211,7 @@ Loggers should be named after the class in which they are used.
         public Foo() {
             LOG.info("constructing Foo");
 
-_Exception handling_
+异常处理
 
     try {
         // code
