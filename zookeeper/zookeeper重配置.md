@@ -158,7 +158,7 @@ zk支持可变配置功能,运行用于选择用户自己的安全需求.使用�
     用户授权是用于获取控制权限的,原理是基于zk可插入式授权schema
 
 * 关闭ACL检查:
-    
+  
     zk支持跳过ACL的配置,如果设置为true,未授权的用户可以设置重新配置的API
 
 #### 检索当前动态配置
@@ -204,57 +204,39 @@ server.3=localhost:2782:2785:participant;localhost:2793
     > reconfig -remove 3,4 -add
     server.5=localhost:2111:2112;2113,6=localhost:2114:2115:observer;2116
 
-The format of the server statement is exactly the same as
-described in the section [Specifying the client port](#sc_reconfig_clientport) and
-includes the client port. Notice that here instead of "server.5=" you
-can just say "5=". In the example above, if server 5 is already in the
-system, but has different ports or is not an observer, it is updated
-and once the configuration commits becomes an observer and starts
-using these new ports. This is an easy way to turn participants into
-observers and vice versa or change any of their ports, without
-rebooting the server.
+在上述示例中，如果服务器5处于系统中，但其他端口不是观察者，一旦配置提交，则会变成观察者，且启动新的端口。这个是将其转换成观察者的简单方式。或者在不重启服务器的情况下改变端口。
 
-ZooKeeper supports two types of Quorum Systems – the simple
-Majority system (where the leader commits operations after receiving
-ACKs from a majority of voters) and a more complex Hierarchical
-system, where votes of different servers have different weights and
-servers are divided into voting groups. Currently, incremental
-reconfiguration is allowed only if the last proposed configuration
-known to the leader uses a Majority Quorum System
-(BadArgumentsException is thrown otherwise).
+zk支持两种不同类型的quorum系统(包括简单的单机系统和复制的分层系统,这个分层系统不同服务器有不同的权重).当前只有在上次使用单机系统更新的时候才支持增量式更新.=
 
-Incremental mode - examples using the Java API:
+可以使用如下代码,解释增量式更新:
 
-    List<String> leavingServers = new ArrayList<String>();
-    leavingServers.add("1");
-    leavingServers.add("2");
-    byte[] config = zk.reconfig(null, leavingServers, null, -1, new Stat());
-    
-    List<String> leavingServers = new ArrayList<String>();
-    List<String> joiningServers = new ArrayList<String>();
-    leavingServers.add("1");
-    joiningServers.add("server.4=localhost:1234:1235;1236");
-    byte[] config = zk.reconfig(joiningServers, leavingServers, null, -1, new Stat());
-    
-    String configStr = new String(config);
-    System.out.println(configStr);
+```java
+List<String> leavingServers = new ArrayList<String>();
+leavingServers.add("1");
+leavingServers.add("2");
+byte[] config = zk.reconfig(null, leavingServers, null, -1, new Stat());
 
-There is also an asynchronous API, and an API accepting comma
-separated Strings instead of List<String>. See
-src/java/main/org/apache/zookeeper/ZooKeeper.java.
+List<String> leavingServers = new ArrayList<String>();
+List<String> joiningServers = new ArrayList<String>();
+leavingServers.add("1");
+joiningServers.add("server.4=localhost:1234:1235;1236");
+byte[] config = zk.reconfig(joiningServers, leavingServers, null, -1, new Stat());
 
-<a name="sc_reconfig_nonincremental"></a>
+String configStr = new String(config);
+System.out.println(configStr);
+```
 
-#### Non-incremental mode
+这个是一个异步API,API接受逗号分割的字符串,将其转换成List.参考`src/java/main/org/apache/zookeeper/ZooKeeper.java`.
 
-The second mode of reconfiguration is non-incremental, whereby a
-client gives a complete specification of the new dynamic system
-configuration. The new configuration can either be given in place or
-read from a file:
+##### 非增量式模式
 
-    > reconfig -file newconfig.cfg
+非增量式重新配置,客户端可以完全指定新的动态系统配置.新的配置可以是就地配置或者是从文件中读取.
 
-//newconfig.cfg is a dynamic config file, see [Dynamic configuration file](#sc_reconfig_file)
+```shell
+> reconfig -file newconfig.cfg
+```
+
+这里`newconfg.cfg`是一个动态配置文件
 
     > reconfig -members
     server.1=125.23.63.23:2780:2783:participant;2791,server.2=125.23.63.24:2781:2784:participant;2792,server.3=125.23.63.25:2782:2785:participant;2793}}
@@ -263,186 +245,97 @@ The new configuration may use a different Quorum System. For
 example, you may specify a Hierarchical Quorum System even if the
 current ensemble uses a Majority Quorum System.
 
-Bulk mode - example using the Java API:
+新的配置使用了不同的quorum系统,例如可以指定分层系统.
 
-    List<String> newMembers = new ArrayList<String>();
-    newMembers.add("server.1=1111:1234:1235;1236");
-    newMembers.add("server.2=1112:1237:1238;1239");
-    newMembers.add("server.3=1114:1240:1241:observer;1242");
-    
-    byte[] config = zk.reconfig(null, null, newMembers, -1, new Stat());
-    
-    String configStr = new String(config);
-    System.out.println(configStr);
+Bulk 模式:
 
-There is also an asynchronous API, and an API accepting comma
-separated String containing the new members instead of
-List<String>. See
-src/java/main/org/apache/zookeeper/ZooKeeper.java.
+```java
+List<String> newMembers = new ArrayList<String>();
+newMembers.add("server.1=1111:1234:1235;1236");
+newMembers.add("server.2=1112:1237:1238;1239");
+newMembers.add("server.3=1114:1240:1241:observer;1242");
 
-<a name="sc_reconfig_conditional"></a>
+byte[] config = zk.reconfig(null, null, newMembers, -1, new Stat());
 
-#### Conditional reconfig
+String configStr = new String(config);
+System.out.println(configStr);
+```
 
-Sometimes (especially in non-incremental mode) a new proposed
-configuration depends on what the client "believes" to be the current
-configuration, and should be applied only to that configuration.
-Specifically, the `reconfig` succeeds only if the
-last configuration at the leader has the specified version.
+这是一个异步API,详情参考
+`src/java/main/org/apache/zookeeper/ZooKeeper.java`.
 
-    > reconfig -file <filename> -v <version>
+##### 条件重配置
 
-In the previously listed Java examples, instead of -1 one could
-specify a configuration version to condition the
-reconfiguration.
+有时候新的配置依赖于客户端现在的配置,只有条件满足才可以使用.特殊情况下,只有leader最后一个配置成功才可以重新配置`reconfig`.
 
-<a name="sc_reconfig_errors"></a>
+```java
+> reconfig -file <filename> -v <version>
+```
 
-#### Error conditions
+##### 错误情况
 
-In addition to normal ZooKeeper error conditions, a
-reconfiguration may fail for the following reasons:
+除了正常的zk错误情况下之外.重新配置可能由于下述原因失败:
 
-1. another reconfig is currently in progress
-    (ReconfigInProgress)
-1. the proposed change would leave the cluster with less than 2
-    participants, in case standalone mode is enabled, or, if
-    standalone mode is disabled then its legal to remain with 1 or
-    more participants (BadArgumentsException)
-1. no quorum of the new configuration was connected and
-    up-to-date with the leader when the reconfiguration processing
-    began (NewConfigNoQuorum)
-1. `-v x` was specified, but the version
-`y` of the latest configuration is not
-`x` (BadVersionException)
-1. an incremental reconfiguration was requested but the last
-    configuration at the leader uses a Quorum System which is
-    different from the Majority system (BadArgumentsException)
-1. syntax error (BadArgumentsException)
-1. I/O exception when reading the configuration from a file
-    (BadArgumentsException)
+1. 其他重新配置现在正在运行中
+2. 处理的变化使得当前集群中少于两个参与者,这个情况下,启动了独立运行模式,或者是在剩余超出一个参与者关闭独立模式.
+3. 新的配置没有quorum连接到leader
+4. 指定了`-v x`,但是版本`y`的最新版本不是`x`
+5. 上一个leader的配置使用了quorum系统,但是却使用增量式重配置
+6. 语法错误
+7. IO移除
+   详情参考`ReconfigFailureCases.java`.
 
-Most of these are illustrated by test-cases in
-*ReconfigFailureCases.java*.
+##### 其余参数
 
-<a name="sc_reconfig_additional"></a>
+**生命周期**:
 
-#### Additional comments
+为了更好的理解增量式重新配置和非增量式的重新配置,假设客户端C1和服务器D和C2和服务器E.在非增量式模式下,每个客户端会调用`conig`去寻找当前的配置,然后本地创建一个服务器.
 
-**Liveness:** To better understand
-the difference between incremental and non-incremental
-reconfiguration, suppose that client C1 adds server D to the system
-while a different client C2 adds server E. With the non-incremental
-mode, each client would first invoke `config` to find
-out the current configuration, and then locally create a new list of
-servers by adding its own suggested server. The new configuration can
-then be submitted using the non-incremental
-`reconfig` command. After both reconfigurations
-complete, only one of E or D will be added (not both), depending on
-which client's request arrives second to the leader, overwriting the
-previous configuration. The other client can repeat the process until
-its change takes effect. This method guarantees system-wide progress
-(i.e., for one of the clients), but does not ensure that every client
-succeeds. To have more control C2 may request to only execute the
-reconfiguration in case the version of the current configuration
-hasn't changed, as explained in the section [Conditional reconfig](#sc_reconfig_conditional). In this way it may avoid blindly
-overwriting the configuration of C1 if C1's configuration reached the
-leader first.
+新的配置可以通过非增量式重新配置指令.都妹纸完毕之后,只有D.E其中一个可以添加.主要是取决于谁对于leader来说是最新的.后边和可以修改前面的配置.这个方法保证系统进程.但是不能保证客户端都会成功.
 
-With incremental reconfiguration, both changes will take effect as
-they are simply applied by the leader one after the other to the
-current configuration, whatever that is (assuming that the second
-reconfig request reaches the leader after it sends a commit message
-for the first reconfig request -- currently the leader will refuse to
-propose a reconfiguration if another one is already pending). Since
-both clients are guaranteed to make progress, this method guarantees
-stronger liveness. In practice, multiple concurrent reconfigurations
-are probably rare. Non-incremental reconfiguration is currently the
-only way to dynamically change the Quorum System. Incremental
-configuration is currently only allowed with the Majority Quorum
-System.
+使用增量式重新配置，变化会leader应用之后生效。因为客户端可以保证产生进程，这个方法保证强壮的生命力。测试环境下，多线程重新配置很少，非增量式重新配置可以动态改变quorum系统。增量式重新配置仅仅在单机系统才可以使用。
 
-**Changing an observer into a
-follower:** Clearly, changing a server that participates in
-voting into an observer may fail if error (2) occurs, i.e., if fewer
-than the minimal allowed number of participants would remain. However,
-converting an observer into a participant may sometimes fail for a
-more subtle reason: Suppose, for example, that the current
-configuration is (A, B, C, D), where A is the leader, B and C are
-followers and D is an observer. In addition, suppose that B has
-crashed. If a reconfiguration is submitted where D is said to become a
-follower, it will fail with error (3) since in this configuration, a
-majority of voters in the new configuration (any 3 voters), must be
-connected and up-to-date with the leader. An observer cannot
-acknowledge the history prefix sent during reconfiguration, and
-therefore it does not count towards these 3 required servers and the
-reconfiguration will be aborted. In case this happens, a client can
-achieve the same task by two reconfig commands: first invoke a
-reconfig to remove D from the configuration and then invoke a second
-command to add it back as a participant (follower). During the
-intermediate state D is a non-voting follower and can ACK the state
-transfer performed during the second reconfig command.
+#### 客户端连接的重新平衡
 
-<a name="ch_reconfig_rebalancing"></a>
+zk集群重启的时候，如果客户端给定相同的连接信息，客户端会随机的选择服务器去连接，这就会使得每个服务器连接数量平衡。通过在服务器重新配置的时候维持这个属性来实现。
 
-## Rebalancing Client Connections
+为了方法能够执行，客户端必须要订阅配置改变。当观察者触发的时候，客户端需要读取新的配置，通过调用`sync`和`getCondig`方法.如果配置正在使用则调用`updateServerList`方法.
 
-When a ZooKeeper cluster is started, if each client is given the same
-connection string (list of servers), the client will randomly choose a
-server in the list to connect to, which makes the expected number of
-client connections per server the same for each of the servers. We
-implemented a method that preserves this property when the set of servers
-changes through reconfiguration. See Sections 4 and 5.1 in the [paper](https://www.usenix.org/conference/usenixfederatedconferencesweek/dynamic-recon%EF%AC%81guration-primarybackup-clusters).
+为了避免大量客户端同时迁移,最后每个客户端随机睡眠一段时间再调用.
 
-In order for the method to work, all clients must subscribe to
-configuration changes (by setting a watch on /zookeeper/config either
-directly or through the `getConfig` API command). When
-the watch is triggered, the client should read the new configuration by
-invoking `sync` and `getConfig` and if
-the configuration is indeed new invoke the
-`updateServerList` API command. To avoid mass client
-migration at the same time, it is better to have each client sleep a
-random short period of time before invoking
-`updateServerList`.
-
-A few examples can be found in:
-*StaticHostProviderTest.java* and
-*TestReconfig.cc*
-
-Example (this is not a recipe, but a simplified example just to
-explain the general idea):
-
-    public void process(WatchedEvent event) {
-        synchronized (this) {
-            if (event.getType() == EventType.None) {
-                connected = (event.getState() == KeeperState.SyncConnected);
-                notifyAll();
-            } else if (event.getPath()!=null &&  event.getPath().equals(ZooDefs.CONFIG_NODE)) {
-                // in prod code never block the event thread!
-                zk.sync(ZooDefs.CONFIG_NODE, this, null);
-                zk.getConfig(this, this, null);
-            }
+```java
+public void process(WatchedEvent event) {
+    synchronized (this) {
+        if (event.getType() == EventType.None) {
+            connected = (event.getState() == KeeperState.SyncConnected);
+            notifyAll();
+        } else if (event.getPath()!=null &&  event.getPath().equals(ZooDefs.CONFIG_NODE)) {
+            // in prod code never block the event thread!
+            zk.sync(ZooDefs.CONFIG_NODE, this, null);
+            zk.getConfig(this, this, null);
         }
     }
-    
-    public void processResult(int rc, String path, Object ctx, byte[] data, Stat stat) {
-        if (path!=null &&  path.equals(ZooDefs.CONFIG_NODE)) {
-            String config[] = ConfigUtils.getClientConfigStr(new String(data)).split(" ");   // similar to config -c
-            long version = Long.parseLong(config[0], 16);
-            if (this.configVersion == null){
-                 this.configVersion = version;
-            } else if (version > this.configVersion) {
-                hostList = config[1];
-                try {
-                    // the following command is not blocking but may cause the client to close the socket and
-                    // migrate to a different server. In practice it's better to wait a short period of time, chosen
-                    // randomly, so that different clients migrate at different times
-                    zk.updateServerList(hostList);
-                } catch (IOException e) {
-                    System.err.println("Error updating server list");
-                    e.printStackTrace();
-                }
-                this.configVersion = version;
+}
+
+public void processResult(int rc, String path, Object ctx, byte[] data, Stat stat) {
+    if (path!=null &&  path.equals(ZooDefs.CONFIG_NODE)) {
+        String config[] = ConfigUtils.getClientConfigStr(new String(data)).split(" ");   // similar to config -c
+        long version = Long.parseLong(config[0], 16);
+        if (this.configVersion == null){
+             this.configVersion = version;
+        } else if (version > this.configVersion) {
+            hostList = config[1];
+            try {
+                // the following command is not blocking but may cause the client to close the socket and
+                // migrate to a different server. In practice it's better to wait a short period of time, chosen
+                // randomly, so that different clients migrate at different times
+                zk.updateServerList(hostList);
+            } catch (IOException e) {
+                System.err.println("Error updating server list");
+                e.printStackTrace();
             }
+            this.configVersion = version;
         }
     }
+}
+```
