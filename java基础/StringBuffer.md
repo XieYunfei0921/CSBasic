@@ -92,3 +92,12 @@ private void readObject(java.io.ObjectInputStream s)
 }
 ```
 
+#### StringBuilder
+
+```mariadb
+字符可变序列,这个类提供了StringBuffer的API.但是不能保证同步.这个类用于单线程使用的情况.可能的话,这个类运行的速度快于StringBuffer.
+StringBuilder的主要操作为@append和@insert方法.
+StringBuilder有容量的限制,只要字符序列的长度没有超出容量,就不需要额外的分配缓冲区.如果超过容量,则会自动的扩容.
+StringBuilder是不安全的,如果需要使用线程安全的话,需要使用StringBuffer类
+```
+
