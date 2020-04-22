@@ -106,7 +106,7 @@
 
    java虚拟机在执行java程序的过程中会把它管理的内存划分为多个不同区域.用途不同,创建和销毁的时间不同.总体来说可以使用下图来描述:
 
-   <img src="E:\截图文件\JVM结构.png" style="zoom:67%;" />
+   <img src="img/JVM结构.png" style="zoom:67%;" />
 
 #### HotSpot虚拟机对象探秘
 
@@ -281,11 +281,11 @@ if (!constants->tag_at(index).is_unresolved_klass()) {
 
    + 句柄访问(间接访问)
 
-     <img src="E:\截图文件\句柄访问.png" style="zoom:67%;" />
+     <img src="img/句柄访问.png" style="zoom:67%;" />
 
    + 直接指针访问(直接访问)
 
-     <img src="E:\截图文件\直接地址访问.png" style="zoom:67%;" />
+     <img src="img/直接地址访问.png" style="zoom:67%;" />
 
    直接指针方法的方式速度更快,hotSpot中常见使用直接访问,但是从软件开发的角度来看,句柄访问也很常见.
 
