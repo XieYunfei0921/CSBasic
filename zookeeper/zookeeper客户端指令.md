@@ -98,7 +98,7 @@ ZooKeeper -server host:port cmd args
 # connect a remote server
 [zkshell: 5] connect remoteIP:2181
 ```
-#### create.
+#### create
 创建一个znode
 ```bash
 # create a persistent_node

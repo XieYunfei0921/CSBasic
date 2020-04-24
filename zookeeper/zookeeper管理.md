@@ -576,83 +576,83 @@ portUnification=false
     会话和临时节点信息.
 
 * *environment/env/envi* :
-    
+  
     所有环境变量信息
 
 * *get_trace_mask/gtmk* :
-    
+  
     当前追踪码信息
     
 * *initial_configuration/icfg* :
-    
+  
     打印配置文件信息
 
 * *is_read_only/isro* :
-    
+  
     返回是否是只读
 
 * *last_snapshot/lsnp* :
-    
+  
     返回zxid和时间戳信息,最新的快照时间,单位为秒
     
 * *leader/lead* :
-    
+  
     返回是否是leader,leader的id以及ip地址
     
 * *monitor/mntr* :
-    
+  
     返回本身的参数
     
 * *observer_connection_stat_reset/orst* :
-    
+  
     重置所有观察者的统计信息
 
 * *ruok* :
-    
+  
     nop操作，检查服务器是否处于运行状态。
     
 * *set_trace_mask/stmk* :
-    
+  
     返回追踪码
     
 * *server_stats/srvr* :
-    
+  
     服务器信息，返回多个属性，用于对服务状态进行简单描述
 
 * *stats/stat* :
-    
+  
     服务器信息，同时会返回链接信息
     
 * *stat_reset/srst* :
-    
+  
     重置服务器统计信息，是*status*的子集
     
 * *observers/obsr* :
-    
+  
     观察者连接到服务器的信息
     
 * *system_properties/sysp* :
-    
+  
     系统参数
 
 * *voting_view* :
-    
+  
     提供当前系统中的投票信息，以map形式返回
 
 * *watches/wchc* :
-    
+  
     以会话形式聚合的观察者信息，以map形式返回
     
 * *watches_by_path/wchp* :
-    
+  
     以路径聚合的观察者信息，以map形式返回
     
 * *watch_summary/wchs* :
-    
+  
     观察者详细信息
 
 * *zabstate* :
-    
+  
     当前ZAB协议状态，可以为ELECTION, DISCOVERY, SYNCHRONIZATION, BROADCAST状态
 
 #### 数据文件管理
