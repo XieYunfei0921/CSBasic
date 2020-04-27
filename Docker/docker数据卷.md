@@ -318,12 +318,10 @@ docker存在有两项配置，用于存储文件到主机上。所以文件在�
    
       + 创建服务(创建NFS数据卷)
    
-        This example shows how you can create an NFS volume when creating a service. This example uses `10.0.0.10` as the NFS server and `/var/docker-nfs` as the exported directory on the NFS server. Note that the volume driver specified is `local`.
-   
         创建服务的时候,这个示例提供了创建NFS数据卷的示例.这个例子使用了`10.0.0.10`作为NFS服务器.使用`/var/docker-nfs`作为服务器导出目录.注意到数据卷驱动器指定为`local`.
    
         ```shell
-        # NFSV3
+   # NFSV3
         $ docker service create -d \
           --name nfs-service \
           --mount 'type=volume,source=nfsvolume,target=/app,volume-driver=local,volume-opt=type=nfs,volume-opt=device=:/var/docker-nfs,volume-opt=o=addr=10.0.0.10' \
@@ -335,7 +333,7 @@ docker存在有两项配置，用于存储文件到主机上。所以文件在�
             --mount 'type=volume,source=nfsvolume,target=/app,volume-driver=local,volume-opt=type=nfs,volume-opt=device=:/,"volume-opt=o=10.0.0.10,rw,nfsvers=4,async"' \
             nginx:latest
         ```
-   
+      
    9. 数据卷数据的备份,恢复和迁移
    
       数据卷易于备份,恢复和迁移.使用`--volume-from`标签创建挂在了数据卷的容器.
@@ -796,53 +794,52 @@ $ sudo lsof /var/lib/docker/containers/74bef250361c7817bee19349c93139621b272bc8f
        377d73dbb466e0bc7c9ee23166771b35ebdbe02ef17753d79fd3571d4ce659d7
        3f02d96212b03e3383160d31d7c6aeca750d2d8a1879965b89fe8146594c453d
        ec1ec45792908e90484f7e629330666e7eee599f08729c93890a7205a6ba35f5
-       l
        ```
-  
-    The directory names do not correspond to the layer IDs (this has been true since Docker 1.10).
-  
-    Now imagine that you have two different Dockerfiles. You use the first one to create an image called `acme/my-base-image:1.0`.
-  
-    目录不会对层编号做出显示.有两个不同的dockerfile,第一个创建一个`acme/my-base-image:1.0`的镜像.
-  
-       ```dockerfile
+    
+  The directory names do not correspond to the layer IDs (this has been true since Docker 1.10).
+    
+  Now imagine that you have two different Dockerfiles. You use the first one to create an image called `acme/my-base-image:1.0`.
+    
+  目录不会对层编号做出显示.有两个不同的dockerfile,第一个创建一个`acme/my-base-image:1.0`的镜像.
+    
+     ```dockerfile
        FROM ubuntu:18.04
        COPY . /app
        ```
-  
-    第二个镜像基于第一个镜像创建,但是还有其他额外的层
-  
-       ```dockerfile
+    
+  第二个镜像基于第一个镜像创建,但是还有其他额外的层
+    
+     ```dockerfile
        FROM acme/my-base-image:1.0
        CMD /app/hello.sh
        ```
-  
-    第二个镜像中包含第一个镜像的所有层,使用`CMD`指令添加新的层,且是一个读写权限的容器层.docker含有第一个镜像的所有层,所以不需要再拉取了.两个镜像共享相同的层.
-  
-    如果使用两个docker文件构建镜像,可以使用`docker image ls`和`docker history`指令确认加密ID和共享层是否一致.
-  
-    1.  创建`cow-test/`目录,并切换到目录中
-  
-    2. 在目录中,创建`hello.sh`文件
-  
-          ```shell
+    
+  第二个镜像中包含第一个镜像的所有层,使用`CMD`指令添加新的层,且是一个读写权限的容器层.docker含有第一个镜像的所有层,所以不需要再拉取了.两个镜像共享相同的层.
+    
+  如果使用两个docker文件构建镜像,可以使用`docker image ls`和`docker history`指令确认加密ID和共享层是否一致.
+    
+  1.  创建`cow-test/`目录,并切换到目录中
+    
+  2. 在目录中,创建`hello.sh`文件
+    
+        ```shell
           #!/bin/sh
           echo "Hello world"
        ```
-  
-       修改执行权限
-  
-          ```shell
+    
+     修改执行权限
+    
+        ```shell
           chmod +x hello.sh
           ```
-  
-    3. 拷贝第一个dockerfile到一个新的文件`Dockerfile.base`中
-  
-    4. 拷贝第二个文件到一个新文件`Dockerfile`中
-  
-    5. 在`cow-test`目录下,构建第一个镜像,设置`PATH`,告知docker在何处添加镜像
-  
-          ```shell
+    
+  3. 拷贝第一个dockerfile到一个新的文件`Dockerfile.base`中
+    
+  4. 拷贝第二个文件到一个新文件`Dockerfile`中
+    
+  5. 在`cow-test`目录下,构建第一个镜像,设置`PATH`,告知docker在何处添加镜像
+    
+        ```shell
           $ docker build -t acme/my-base-image:1.0 -f Dockerfile.base .
           Sending build context to Docker daemon  812.4MB
           Step 1/2 : FROM ubuntu:18.04
@@ -853,10 +850,10 @@ $ sudo lsof /var/lib/docker/containers/74bef250361c7817bee19349c93139621b272bc8f
           Successfully built bd09118bcef6
           Successfully tagged acme/my-base-image:1.0
        ```
-  
-    6. 构建第二个镜像
-  
-          ```shell
+    
+  6. 构建第二个镜像
+    
+        ```shell
           $ docker build -t acme/my-final-image:1.0 -f Dockerfile .
           Sending build context to Docker daemon  4.096kB
           Step 1/2 : FROM acme/my-base-image:1.0
@@ -868,19 +865,19 @@ $ sudo lsof /var/lib/docker/containers/74bef250361c7817bee19349c93139621b272bc8f
           Successfully built dbf995fc07ff
           Successfully tagged acme/my-final-image:1.0
        ```
-  
-    7.  检查镜像的大小
-  
-          ```shell
+    
+  7.  检查镜像的大小
+    
+        ```shell
           $ docker image ls
           REPOSITORY                         TAG                     IMAGE ID            CREATED             SIZE
           acme/my-final-image                1.0                     dbf995fc07ff        58 seconds ago      103MB
           acme/my-base-image                 1.0                     bd09118bcef6  
           ```
-  
-    8. 检查每个镜像的层信息
-  
-          ```shell
+    
+  8. 检查每个镜像的层信息
+    
+        ```shell
           $ docker history bd09118bcef6
           IMAGE               CREATED             CREATED BY                                      SIZE                COMMENT
           bd09118bcef6        4 minutes ago       /bin/sh -c #(nop) COPY dir:35a7eb158c1504e...   100B                
@@ -891,9 +888,9 @@ $ sudo lsof /var/lib/docker/containers/74bef250361c7817bee19349c93139621b272bc8f
           <missing>           3 months ago        /bin/sh -c set -xe   && echo '#!/bin/sh' >...   745B                
           <missing>           3 months ago        /bin/sh -c #(nop) ADD file:eef57983bd66e3a...   103MB      
        ```
-  
-          ```shell
-          $ docker history dbf995fc07ff
+    
+        ```shell
+       $ docker history dbf995fc07ff
           IMAGE               CREATED             CREATED BY                                      SIZE                COMMENT
           dbf995fc07ff        3 minutes ago       /bin/sh -c #(nop)  CMD ["/bin/sh" "-c" "/a...   0B                  
           bd09118bcef6        5 minutes ago       /bin/sh -c #(nop) COPY dir:35a7eb158c1504e...   100B                
@@ -904,12 +901,12 @@ $ sudo lsof /var/lib/docker/containers/74bef250361c7817bee19349c93139621b272bc8f
           <missing>           3 months ago        /bin/sh -c set -xe   && echo '#!/bin/sh' >...   745B                
           <missing>           3 months ago        /bin/sh -c #(nop) ADD file:eef57983bd66e3a...   103MB  
           ```
-  
-       注意所有的层都被标识处理,处理第二个镜像的顶层.且其他层,两个进行共享,仅仅存储在`/var/lib/docker`中,新的层不占用任何空间,因为不改变任何文件,仅仅运行了一个指令.
-  
-          > 注意: `docker history`丢失的行内容会建立在其他文件系统上,且本地不可以获取.这个可以忽略
-
-  + 高效拷贝构建的容器
+    
+     注意所有的层都被标识处理,处理第二个镜像的顶层.且其他层,两个进行共享,仅仅存储在`/var/lib/docker`中,新的层不占用任何空间,因为不改变任何文件,仅仅运行了一个指令.
+    
+        > 注意: `docker history`丢失的行内容会建立在其他文件系统上,且本地不可以获取.这个可以忽略
+    
++ 高效拷贝构建的容器
   
     开启容器的时候,一个薄的可写容器层放置在其他层的顶部,所有对文件系统的修改防止在这之上,不会修改的文件不会复制到可写层上.这意味着可写层越小越好.
   
