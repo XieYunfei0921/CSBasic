@@ -19,7 +19,7 @@ spring程序允许懒加载,当懒加载开启的时候,bean之后在需要的�
 注意到需要考虑JVM分配足够的内存给bean.不仅仅那些启动时初始化的情况.因此,默认情况下不支持懒加载,开启懒加载的时候
 注意JVM 的堆内存一定需要足够.
 启动方式:
-```markdown
+```properties
 spring.main.lazy-initialization=true
 ```
 > 注意: 如果需要对某个参数进行懒加载,可以使用@lazy(true)注解
@@ -55,7 +55,7 @@ public  class XXX{
 4. 链式API的使用
 `SpringApplicationBuilder`可以使用多个方法的链式调用.这个方法可以包含父方法`parent`和
 `child`方法.
-```markdown
+```java
 new SpringApplicationBuilder()
         .sources(Parent.class)
         .child(Application.class)
