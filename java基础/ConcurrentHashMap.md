@@ -1,7 +1,10 @@
 #### 介绍
 
 ```markdown
-支持全并发检索和高期望并发更新的hash表.这个类支持hash表.但是,尽管所有的操作都是线程安全的,检索操作需要锁定操作,且不支持对整个hash表进行锁定.这个类是与hash表相互操作.检索操作@get 不会阻塞,所以可以与更新操作进行重叠.检索操作反应了最近完成的结果.对于聚合操作,例如putAll或者clear方法,并发检索仅仅会反应一条数据的增删结果.这个方法不会抛出并发修改异常,但是这个类不会抛出并发修改异常.但是,迭代器一个时刻只能被一个线程使用.如果存在太多的hash碰撞的时候,这个表可以动态扩展,但是表的动态扩展是一个相当慢的操作.可能的话,使用@initialCapacity对表的大小做出估计是有必要的.另一个需要的参数就是加载因子.此外,对于上一个状态的容量,构造器可以指定一个并发等级@concurrencyLevel 作为内部大小设置的线索.注意到如果多个相同的key会降低hash表的时间复杂度. @ConcurrentHashMap 的key存储在一个集合中.同时@ConcurrentHashMap 可以作为可扩展的map,通过使用原子包的@LongAdder 实现,且通过方法@computeIfAbsent 进行初始化.
+支持全并发检索和高期望并发更新的hash表.这个类支持hash表.但是,尽管所有的操作都是线程安全的,检索操作需要锁定操作,且不支持对整个hash表进行锁定.这个类是与hash表相互操作.检索操作@get 不会阻塞,所以可以与更新操作进行重叠.检索操作反应了最近完成的结果.
+对于聚合操作,例如putAll或者clear方法,并发检索仅仅会反应一条数据的增删结果.
+这个方法不会抛出并发修改异常,但是这个类不会抛出并发修改异常.但是,迭代器一个时刻只能被一个线程使用.如果存在太多的hash碰撞的时候,这个表可以动态扩展,但是表的动态扩展是一个相当慢的操作.可能的话,使用@initialCapacity对表的大小做出估计是有必要的.
+另一个需要的参数就是加载因子.此外,对于上一个状态的容量,构造器可以指定一个并发等级@concurrencyLevel 作为内部大小设置的线索.注意到如果多个相同的key会降低hash表的时间复杂度. @ConcurrentHashMap 的key存储在一个集合中.同时@ConcurrentHashMap 可以作为可扩展的map,通过使用原子包的@LongAdder 实现,且通过方法@computeIfAbsent 进行初始化.
 例如,添加一个计数值到@ConcurrentHashMap<String,LongAdder> freqs 中,可以使用:
 	freqs.computeIfAbsent(key, k -> new LongAdder()).increment();进行扩展
 这个类以及其迭代器实现了所有map接口的方法.这个类类似于hashtable但是与hashmap类不相似,不允许空值作为key/value
