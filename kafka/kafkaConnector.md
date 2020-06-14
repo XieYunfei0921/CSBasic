@@ -97,8 +97,6 @@ kafka连接器支持两种执行模式，分别是单机模式和分布式模式
 
   worker的value转换器
 
-Sink connectors also have a few additional options to control their input. Each sink connector must set one of the following:
-
 sink连接器有多个配置控制输入。每个sink的连接器必须设置下述参数
 
 - `topics`

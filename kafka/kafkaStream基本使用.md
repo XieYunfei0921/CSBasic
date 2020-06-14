@@ -82,7 +82,7 @@ object WordCountApplication extends App {
 
 #### 示例程序的运行
 
-1.  下载kaka
+1.  下载kafka
 
    ```shell
    > tar -xzf kafka_2.12-2.5.0.tgz
