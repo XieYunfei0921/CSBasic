@@ -113,15 +113,15 @@ public static Integer valueOf(int i) {
 
 ```markdown
 IntegerCache:
-这个缓存支持对象自动装箱的辨识跟你,值在-128-127之间.
+这个缓存支持对象自动装箱的辨识,值在-128-127之间.
 这个缓存首次使用的时候被初始化,缓存大小可以使用JVM参数{@code -XX:AutoBoxCacheMax=<size>}控制.在虚拟机初始化时,会设置IntegerCache.high参数并保存在私有的系统参数中(jdk.internal.misc.VM)
 ```
 
 ##### 属性
 
 ```markdown
-low下限值
-high 上限值
+low	缓存下限值
+high 缓存上限值
 cache 缓存表
 ```
 

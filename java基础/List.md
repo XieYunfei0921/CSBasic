@@ -3,7 +3,8 @@
 #### 介绍
 
 ```markdown
-List的实现,大小可变的数组.实现所有list的操作.处理实现List接口之外,这个类提供了操作数组大小的功能.其中@size @isEmpth @get @set @iterator和@listIterator运行时间为常数等级,添加操作也是常数的时间复杂度.其他操作都是线性时间复杂度.相比较LinkedList来说具有较低的常数因子.每个@ArrayList对象都有一个@capacity设置,这个是用于存储list元素的数组大小,至少要比实际数组大.当元素插入到ArrayLost的时候,会自动进行扩容.一个应用在插入大量元素的时候,需要使用@ensureCapacity检查是否具有足够的容量.会降低重分配的数量.
+List的实现,大小可变的数组.实现所有list的操作.处理实现List接口之外,这个类提供了操作数组大小的功能.其中@size @isEmpth @get @set @iterator和@listIterator运行时间为常数等级,添加操作也是常数的时间复杂度.其他操作都是线性时间复杂度.相比较LinkedList来说具有较低的常数因子.每个@ArrayList对象都有一个@capacity设置,这个是用于存储list元素的数组大小,至少要比实际数组大.当元素插入到ArrayList的时候,会自动进行扩容.一个应用在插入大量元素的时候,需要使用@ensureCapacity检查是否具有足够的容量.会降低重分配的数量.
+
 注意到这个实现是非同步的.如果多个线程获取ArrayList对象,且至少一个线程修改了list,那么必须要使用外部同步措施.典型的实现是在一些对象上使用同步措施,这样可以将元素有序压入列表中.如果不存在这样的对象,可以使用这个列表的保证类@synchronizedList,按照如下方法定义
 	List list = Collections.synchronizedList(new ArrayList(...));
 快速失败

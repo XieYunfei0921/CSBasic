@@ -2,6 +2,7 @@
 
 ```markdown
 一个执行器服务@ExecutorService,使用多个线程池执行提交的任务,正常情况下使用@Executors的工厂方法配置.线程池会导致两个不同的问题,首先当执行大量异步任务的时候会提升执行的效率.由于每个任务的调用开销的减小,当执行任务集合的时候会提供界限并管理资源.每个@ThreadPoolExecutor 同时也维护一些静态参数,例如完成任务的数量.为了可以适用于多数的上下文,这个类提供许多可调节的参数和可扩展的拦截点.但是,程序使用者可以通过@Executors 的工厂方法newCachedThreadPool(这个是无解线程池,且自动进行线程回收).其中方法@newFixedThreadPool 提供了定长的线程池,方法@newSingleThreadExecutor提供了单个后台线程.
+
 核心和最大线程池大小
 执行器@ThreadPoolExecutor 会自动的条件线程池的大小,主要是通过调节@corePoolSize 和@maximumPoolSize.当新的任务使用方法@execute(Runnable) 提交的时候.如果线程数量小于@corePoolSize,那么就会创建一个新的线程,用于处理请求,无论此时worker线程是否处于空载状态下.如果线程数量小于@maximumPoolSize,只有当队列满的时候才会创建线程用于处理请求.设置corePoolSize=maximumPoolSize,这样就可以创建一个定长的线程池,通过设置@maximumPoolSize为一个上限值,例如Integer.MAX_VALUE,可以允许线程池处理任意数量的并发任务。
 更一般地,可以通过方法@setCorePoolSize和@setMaximumPoolSize 进行动态的设置.
@@ -9,7 +10,6 @@
 默认情况下,尽管只有当新的任务到达的时候,核心任务才会创建和启动,但是这个可以使用方法@prestartCoreThread或者方法@prestartAllCoreThreads进行重写。如果使用非空队列进行构建，可以对其进行重新启动。
 2. 创建新的线程
 新线程使用@ThreadFactory 进行创建。如果没有特别地指定,会使用Executors#defaultThreadFactory进行创建.这里线程的优先级都是@NORM_PRIORITY,且没有启动的状态.提供提供不同的@ThreadFactory 可以修改线程组,优先权,启动状态.如果线程工厂类不能够创建线程.执行器会继续,但是不能够执行任何的任务.线程需要控制修改线程.如果工作线程或者是其他线程使用线程池,且没有控制这个权限.那么服务将会降级.配置改变不会按照时序的方式起效.
-
 3. Keep-alive的次数
 如果线程池超出了@corePoolSize的数量，超出的线程在空载时间超出指定存活时间的时候会终止。当线程池没有被激活使用的时候会降低资源的消耗。如果线程池之后激活率，新的线程会被构建。这个参数可以通过方法@setKeepAliveTime进行动态的修改。可以使用@Long.MAX_VALUE和参数@TimeUnit#NANOSECONDS 关闭空载线程。默认情况下，keep-alive策略只有当超出@corePoolSize 线程容量的时候才可以使用，但是方法@allowCoreThreadTimeOut 可以用于应用这个超时策略，是由这个@keepAliveTime值不为0即可。
 
@@ -36,7 +36,7 @@
  这个类提供了每个任务执行前后的回调方法.可以用于操作执行环境.例如,重新初始化本地线程变量,收集统计值等.如果拦截点,回调或者阻塞队列方法抛出异常,内部worker线程会失败,立即终止并可能被替换掉.
  
  7. 队列维护
- 方法@getQueue() 允许获取工作队列，用于监视和debug。这个方法不建议使用。当大陆队列任务放弃的时候使用@remove或者@purge方法可以用于存储回收。
+ 方法@getQueue() 允许获取工作队列，用于监视和debug。这个方法不建议使用。当大量队列任务放弃的时候使用@remove或者@purge方法可以用于存储回收。
  
  8. 回收
  一个线程池不在被引用且没有剩余的线程的时候就需要被回收(GC).不需要显式的关闭.可以配置线程池去允许素有线程池中所有未使用的线程最终死亡.注意通过设置keep-alive的时间.
