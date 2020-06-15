@@ -57,7 +57,7 @@ kafka连接器支持两种执行模式，分别是单机模式和分布式模式
 
 - `group.id` 
 
-  集群唯一标识,用于在连接器集群组中构建,之一不要和消费者组ID冲突
+  集群唯一标识,用于在连接器集群组中构建,注意不要和消费者组ID冲突
 
 - `config.storage.topic` 
 
@@ -230,13 +230,19 @@ listeners=http://localhost:8080,https://localhost:8443
 - `ssl.secure.random.implementation`
 - `ssl.trustmanager.algorithm`
 - `ssl.endpoint.identification.algorithm`
-- `ssl.client.auth
+- `ssl.client.auth`
 
 REST API不仅仅可以被用户使用,用于监控和管理器kafka客户端.也可以用来进行多个集群间的交互.follower节点接受的REST API会被发送到leader节点上.这种情况下会监听给定host的API,使用`rest.advertised.host.name`, `rest.advertised.port`和`rest.advertised.listener`配置可以改变leader的URI地址.当使用HTTP和HTTPS监听的时候,`rest.advertised.listener`可以用于跨集群的交互.
 
-支持下述rest api
+支持下述rest api,我这里使用的是Postman进行测试
 
 - `GET /connectors`
+
+  ```json
+  [
+      "sink-to-hdfs"
+  ]
+  ```
 
   返回激活的连接器
 
@@ -244,13 +250,65 @@ REST API不仅仅可以被用户使用,用于监控和管理器kafka客户端.�
 
   创建新的连接器,请求体需要是json格式,包含`name`属性,和`config`属性
 
+  ```json
+  {
+      "name": "sink-to-hdfs",
+      "config": {
+          "connector.class": "io.confluent.connect.hdfs.HdfsSinkConnector",
+          "hdfs.path": "/origin_data/gmall/log",
+          "tasks.max": "1",
+          "topics": "topic_start",
+          "hdfs.url": "hdfs://master.hadoop:9000",
+          "name": "sink-to-hdfs",
+          "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+          "key.converter": "org.apache.kafka.connect.converters.ByteArrayConverter"
+      }
+  }
+  ```
+
 - `GET /connectors/{name}` 
 
   获取指定连接器的信息
 
+  ```json
+  {
+      "name": "sink-to-hdfs",
+      "config": {
+          "connector.class": "connector.HdfsSinkConnector",
+          "hdfs.path": "/origin_data/gmall/log",
+          "tasks.max": "1",
+          "topics": "topic_start",
+          "hdfs.url": "hdfs://master.hadoop:9000",
+          "name": "sink-to-hdfs",
+          "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+          "key.converter": "org.apache.kafka.connect.converters.ByteArrayConverter"
+      },
+      "tasks": [
+          {
+              "connector": "sink-to-hdfs",
+              "task": 0
+          }
+      ],
+      "type": "sink"
+  }
+  ```
+
 - `GET /connectors/{name}/config`
 
   获取指定连接器的配置参数
+
+  ```json
+  {
+      "connector.class": "connector.HdfsSinkConnector",
+      "hdfs.path": "/origin_data/gmall/log",
+      "tasks.max": "1",
+      "topics": "topic_start",
+      "hdfs.url": "hdfs://master.hadoop:9000",
+      "name": "sink-to-hdfs",
+      "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+      "key.converter": "org.apache.kafka.connect.converters.ByteArrayConverter"
+  }
+  ```
 
 - `PUT /connectors/{name}/config` 
 
@@ -259,6 +317,25 @@ REST API不仅仅可以被用户使用,用于监控和管理器kafka客户端.�
 - `GET /connectors/{name}/status` 
 
   获取连接器当前的状态,包括运行状态(运行,失败,暂停).如果失败则会显示错误信息.
+
+  ```json
+  {
+      "name": "sink-to-hdfs",
+      "connector": {
+          "state": "RUNNING",
+          "worker_id": "192.168.119.128:8083"
+      },
+      "tasks": [
+          {
+              "id": 0,
+              "state": "FAILED",
+              "worker_id": "192.168.119.128:8083",
+              "trace": "java.lang.NoClassDefFoundError: org/apache/hadoop/conf/Configuration\n\tat connector.HdfsSinkTask.start(HdfsSinkTask.java:41)\n\tat org.apache.kafka.connect.runtime.WorkerSinkTask.initializeAndStart(WorkerSinkTask.java:301)\n\tat org.apache.kafka.connect.runtime.WorkerSinkTask.execute(WorkerSinkTask.java:189)\n\tat org.apache.kafka.connect.runtime.WorkerTask.doRun(WorkerTask.java:177)\n\tat org.apache.kafka.connect.runtime.WorkerTask.run(WorkerTask.java:227)\n\tat java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:511)\n\tat java.util.concurrent.FutureTask.run(FutureTask.java:266)\n\tat java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)\n\tat java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)\n\tat java.lang.Thread.run(Thread.java:748)\nCaused by: java.lang.ClassNotFoundException: org.apache.hadoop.conf.Configuration\n\tat java.net.URLClassLoader.findClass(URLClassLoader.java:382)\n\tat java.lang.ClassLoader.loadClass(ClassLoader.java:424)\n\tat sun.misc.Launcher$AppClassLoader.loadClass(Launcher.java:349)\n\tat java.lang.ClassLoader.loadClass(ClassLoader.java:357)\n\t... 10 more\n"
+          }
+      ],
+      "type": "sink"
+  }
+  ```
 
 - `GET /connectors/{name}/tasks` 
 
@@ -299,6 +376,41 @@ REST API不仅仅可以被用户使用,用于监控和管理器kafka客户端.�
 - `GET /connector-plugins`
 
   返回kafka连接器集群安装的连接器插件集合.
+
+  ```json
+  [
+      {
+          "class": "connector.HdfsSinkConnector",
+          "type": "sink",
+          "version": "2.4.0"
+      },
+      {
+          "class": "org.apache.kafka.connect.file.FileStreamSinkConnector",
+          "type": "sink",
+          "version": "2.4.0"
+      },
+      {
+          "class": "org.apache.kafka.connect.file.FileStreamSourceConnector",
+          "type": "source",
+          "version": "2.4.0"
+      },
+      {
+          "class": "org.apache.kafka.connect.mirror.MirrorCheckpointConnector",
+          "type": "source",
+          "version": "1"
+      },
+      {
+          "class": "org.apache.kafka.connect.mirror.MirrorHeartbeatConnector",
+          "type": "source",
+          "version": "1"
+      },
+      {
+          "class": "org.apache.kafka.connect.mirror.MirrorSourceConnector",
+          "type": "source",
+          "version": "1"
+      }
+  ]
+  ```
 
 - `PUT /connector-plugins/{connector-type}/config/validate` 
 
