@@ -6,8 +6,6 @@ zk的心跳信息是一个原子的消息系统,这个消息系统保持了所�
 
 ##### 保证,配置和定义
 
-The specific guarantees provided by the messaging system used by ZooKeeper are the following
-
 zk的消息系统提供特殊的保证:
 
 + 可靠的传输

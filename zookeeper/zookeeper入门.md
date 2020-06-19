@@ -24,9 +24,13 @@ bin/zkServer.sh start
 
 zk使用log4j作为日志记录
 
+
+
 #### zookeeper 存储管理
 
 对于长期生成的系统,zk存储需要外部管理.
+
+
 
 #### zookeeper的连接
 
