@@ -110,7 +110,7 @@ public class OAuth2LoginSecurityConfig extends WebSecurityConfigurerAdapter {
 + 通常情况下,oauth2客户端的注册
 对于普通的oauth2和openId提供器,包括google,github,facebook等等,可以使用`provider`属性
 配置自定义的提供器. spring boot会推测对应的客户端注册.
-```markdown
+```properties
 spring.security.oauth2.client.registration.my-client.client-id=abcd
 spring.security.oauth2.client.registration.my-client.client-secret=password
 spring.security.oauth2.client.registration.my-client.provider=google
@@ -122,14 +122,14 @@ spring.security.oauth2.client.registration.google.client-secret=password
 2. 资源服务器
 如果类路径中配置了`spring-security-oauth2-resource-server`属性,spring boot可以创建
 OAuth2资源服务器.对于JWT配置来说,可以进行如下配置:
-```markdown
+```properties
 spring.security.oauth2.resourceserver.jwt.jwk-set-uri=https://example.com/oauth2/default/v1/keys
 spring.security.oauth2.resourceserver.jwt.issuer-uri=https://dev-123456.oktapreview.com/oauth2/default/
 ```
 servlet和响应式应用程序具有相同的配置.
 在servlet应用中需要定义`JwtDecoder`的bean,在响应式应用中需要定义`ReactiveJwtDecoder`的bean.
 如果使用的是opaque认证而不是JWT,需要进行如下配置:
-```markdown
+```properties
 spring.security.oauth2.resourceserver.opaquetoken.introspection-uri=https://example.com/check-token
 spring.security.oauth2.resourceserver.opaquetoken.client-id=my-client-id
 spring.security.oauth2.resourceserver.opaquetoken.client-secret=my-client-secret
