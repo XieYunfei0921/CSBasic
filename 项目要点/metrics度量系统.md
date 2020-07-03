@@ -38,3 +38,27 @@ Spring Scheduler,SpringBoot
 
 ### 项目细则
 
+#### 如何使用OAuth2做权限验证的
+
+具体做法：
+
+在应用的启动程序上添加`@EnableGlobalMethodSecurity`注解
+
+自定义OAuth2验证规则，提供账户服务，统计服务，以及推送服务的权限.
+
+#### Spring如何进行任务的调度以及邮件服务的支持
+
+使用Spring Framework提供的Email功能以及调度功能,实现邮件推送以及调度的功能。
+
+配置cron参数，定时将邮件推送给订阅用户
+
+#### 推送服务是怎么做的
+
+
+
+#### 日志采集是如何进行的
+
+
+
+#### 集群监控Turbine是如何实现的
+
