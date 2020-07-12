@@ -1,9 +1,9 @@
 Spring Boot 安全
 ---
-如果类路径中配置了spring security，wen应用默认情况下就会使用安全配置。spring boot依靠spring安全的内容协调策略，决定
-是否使用基本的HTTP还是表单登录。为了给web应用添加方法级别的安全措施。可以添加`@EnableGlobalMethodSecurity`注解.
+如果类路径中配置了spring security，web应用默认情况下就会使用安全配置。spring boot依靠spring安全的内容协调策略，决定使用基本的HTTP还是表单登录。为了给web应用添加方法级别的安全措施。可以添加`@EnableGlobalMethodSecurity`注解.
 默认的`UserDetailsService`存在有单个用户,用户名是`user`,密码随机,且会打印到INFO等级的日志上:
 显示如下:
+
 ```markdown
 Using generated security password: 78fa095d-3f4c-48b1-ad50-e24c31d5cf35
 ```

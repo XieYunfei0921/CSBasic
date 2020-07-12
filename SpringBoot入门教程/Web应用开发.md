@@ -280,9 +280,9 @@ spring boot提供webflux的自动配置,对大多数应用都起作用
     + 配置消息读取@HttpMessageReader和写出@HttpMessageWriter的压缩方式
     + 支持静态资源,包括webjar的支持
     + 如果需要保持webflux的特征,需要添加额外的webflux特征,可以使用`@Configuration`类型
-    的@WebFluxConfigurer 但是不要使用`@EnableWebFlux`注解
+      的@WebFluxConfigurer 但是不要使用`@EnableWebFlux`注解
     + 如果需要完全的控制webflux,需要使用`@EnvableWebFlux`配置你的`@Configuration`
-    
+  
 + 配置读取和写出的压缩方式(codec)
 spring webflux使用HTTP消息读取器@HttpMessageReader和写出器@HttpMessageWriter接口转换HTTP请求
 和响应.使用@CodecConfigurer配置压缩方式,通过监视类路径的可用库
@@ -416,7 +416,7 @@ spring boot使用不同的应用上下文，用于对嵌入式服务容器的支
     + 错误管理: 错误页面的位置`server.error.path`
     + SSL
     + HTTP压缩信息
-    
+  
 + 自定义ConfigurableServletWebServerFactory
 如果觉得上述配置的功能较少，可以自定义`TomcatServletWebServerFactory`,`JettyServletWebServerFactory`
 或者`UndertowServletWebServerFactory`
