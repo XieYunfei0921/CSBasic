@@ -6,8 +6,8 @@
 
 本身`ChannelHandler`不支持任何方法(接口).需要选择如下功能
 
-1. `ChannelInboundHandler`: 通道入站处理器,用于处理入站的IO事件
-2. `ChannelOutBoundHandler`: 通道出站处理器,用于处理出站IO事件
+1. [`ChannelInboundHandler`](# ChannelInboundHandler): 通道入站处理器,用于处理入站的IO事件
+2. [`ChannelOutBoundHandler`](# ChannelOutBoundHandler): 通道出站处理器,用于处理出站IO事件
 
 对于此,提供了下列的适配器:
 
@@ -84,5 +84,104 @@ void handlerRemoved(ChannelHandlerContext ctx) throws Exception;
 
 // 如果触发异常的时候会触发这个回调
 void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception;
+```
+
+#### ChannelInboundHandler
+
+`ChannelInboundHandler`通道入站处理器提供了一些回调函数,用于对处理的过程进行控制,允许用户自定义回调逻辑.
+
+```java
+// 通道注册到环境时候触发回调
+void channelRegistered(ChannelHandlerContext ctx) throws Exception;
+
+// 通道从上下文环境中解除注册的时候触发回调
+void channelUnregistered(ChannelHandlerContext ctx) throws Exception;
+
+// 通道激活的时候触发回调
+void channelActive(ChannelHandlerContext ctx) throws Exception;
+
+// 通道解除激活状态的时候触发
+void channelInactive(ChannelHandlerContext ctx) throws Exception;
+
+// 通道读取的时候触发
+void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception;
+
+// 通道读取完毕的时候触发
+void channelReadComplete(ChannelHandlerContext ctx) throws Exception;
+
+// 用户事件触发的时候触发
+void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception;
+
+// 通道可写性变动得到时候触发
+void channelWritabilityChanged(ChannelHandlerContext ctx) throws Exception;
+
+// 异常捕获触发
+void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception;
+```
+
+#### ChannelOutBoundHandler
+
+`ChannelHandler`用于提醒通道输出处理器`ChannelOutBoundHandler`动作.
+
+```java
+// 绑定端口时候触发,仅仅触发一次
+void bind(
+    ChannelHandlerContext ctx, SocketAddress localAddress, ChannelPromise promise) throws Exception;
+
+// 连接操作的时候触发
+void connect(
+    ChannelHandlerContext ctx, SocketAddress remoteAddress,
+    SocketAddress localAddress, ChannelPromise promise) throws Exception;
+
+// 断开连接的时候触发
+void disconnect(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception;
+
+// 关闭操作执行的时候触发
+void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception;
+
+// 从当前时间环@EventLoop 中解除注册的时候触发
+void deregister(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception;
+
+// 上下文读取数据的时候触发,拦截器功能
+void read(ChannelHandlerContext ctx) throws Exception;
+
+// 触发写操作的时候回调
+void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception;
+
+// 刷写操作执行回调
+void flush(ChannelHandlerContext ctx) throws Exception;
+```
+
+#### SimpleChannelInboundHandler
+
+`SimpleChannelInboundHandler`是`ChannelInboundHandlerAdapter`用于显示地处理特定类型消息的适配器。
+
+```java
+public class StringHandler extends SimpleChannelInboundHandler<String>{
+    @Override
+    protected void channelRead0(ChannelHandlerContext ctx, link String message) throws Exception{
+        System.out.println(message);
+    }
+}
+```
+
+这里需要注意到如何构造器中设置`autorelease=true`的情况下，会通过`ReferenceCountUtil`的释放方法对处理过的消息进行释放。如果需要将消息传递到通道流中下一个处理器的时候，需要使用`ReferenceCountUtil`的`Retain`方法进行保留。
+
+#### ChannelInitializer
+
+通道初始化工具，是一种特殊的通道入站处理器，提供一种简单的方法，用于在其注册到事件环`EventLoop`的时候初始化通道。
+
+它的实现通常用于在`Boostrap`的`handler`方法，`ServerBootstrap`的`handler`方法，`ServerBootstrap`的`childHandler`中。用于设置一个通道的通道流。
+
+```java
+public class MyChannelInitializer extends ChannelInitializer{
+    public void initChannel(Channel channel) {
+        channel.pipeline().addLast("myHandler", new MyHandler());
+    }
+}
+
+ServerBootstrap bootstrap=...;
+// 添加通道pipeline到通道中
+bootstrap.childHandler(new MyChannelInitializer());
 ```
 
