@@ -32,9 +32,9 @@ public class ThreadId {
 
 ```markdown
 1. threadLocalHashCode
-本地线程依赖每个线程的线性探测hashmap连接到每个线程.本地线程对象可以作为key,通过threadLocalHashCode.进行搜索.这是一种自定义的hashCode,可以处理hash碰撞.
+本地线程依赖 每个线程的线性探测hashmap 连接到每个线程.本地线程对象可以作为key,通过threadLocalHashCode.进行搜索.这是一种自定义的hashCode,可以处理hash碰撞.
 2. nextHashCode:AtomicInteger
-当前hashCode,原子性更新,初始值为0
+当前hashCode, 原子性更新, 初始值为0
 3. HASH_INCREMENT
 生成的hashCode变化量
 ```
@@ -97,7 +97,7 @@ protected T initialValue()
 本地线程变量映射表
 
 ```markdown
-线程本地变量的映射表是一个自定义的hashmap，仅仅用于维护线程本地变量。外部不可以使用线程本地变量的操作。这个类是包私有的。运行在线程类中声明属性。使用线程本地变量的操作。这个类是包私有的。运行在线程类中声明属性。自动的对其进行垃圾回收。
+线程本地变量的映射表是一个自定义的hashmap，仅仅用于维护线程本地变量。外部不可以使用线程本地变量的操作。这个类是包私有的。运行在线程类中声明属性。使自动的对其进行垃圾回收。
 ```
 
 ##### ThreadLocalMap属性
